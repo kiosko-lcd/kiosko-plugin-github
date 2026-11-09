@@ -1,0 +1,5 @@
+[
+  { "id": "1", "unread": true, "reason": "review_requested", "updated_at": "2026-11-09T09:00:00Z", "subject": { "title": "Rotate the staging certificates", "type": "PullRequest" }, "repository": { "full_name": "octo-org/infra" } },
+  { "id": "2", "unread": true, "reason": "mention", "updated_at": "2026-11-09T08:00:00Z", "subject": { "title": "Login page is blank on Safari 17", "type": "Issue" }, "repository": { "full_name": "octo-org/web-app" } },
+  { "id": "3", "unread": true, "reason": "ci_activity", "updated_at": "2026-11-09T10:05:00Z", "subject": { "title": "CI workflow run failed for main branch", "type": "CheckSuite" }, "repository": { "full_name": "octo-org/web-app" } }
+]

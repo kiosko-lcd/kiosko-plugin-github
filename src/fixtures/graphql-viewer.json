@@ -1,0 +1,46 @@
+{
+  "data": {
+    "viewer": {
+      "login": "you",
+      "repositories": { "nodes": [ { "nameWithOwner": "octo-org/web-app" }, { "nameWithOwner": "you/dotfiles" } ] }
+    },
+    "toReview": {
+      "nodes": [
+        {
+          "__typename": "PullRequest", "number": 12, "title": "Rotate the staging certificates", "isDraft": false,
+          "createdAt": "2026-11-07T08:00:00Z", "updatedAt": "2026-11-09T07:00:00Z",
+          "repository": { "nameWithOwner": "octo-org/infra" }, "author": { "login": "jordan" },
+          "reviewDecision": "REVIEW_REQUIRED",
+          "commits": { "nodes": [ { "commit": { "statusCheckRollup": { "state": "FAILURE" } } } ] }
+        }
+      ]
+    },
+    "authored": {
+      "nodes": [
+        {
+          "__typename": "PullRequest", "number": 88, "title": "Rate-limit the public endpoints", "isDraft": false,
+          "createdAt": "2026-11-08T08:00:00Z", "updatedAt": "2026-11-09T09:00:00Z",
+          "repository": { "nameWithOwner": "octo-org/api" }, "author": { "login": "you" },
+          "reviewDecision": "CHANGES_REQUESTED",
+          "commits": { "nodes": [ { "commit": { "statusCheckRollup": { "state": "SUCCESS" } } } ] }
+        },
+        {
+          "__typename": "PullRequest", "number": 17, "title": "Offline sync for drafts", "isDraft": true,
+          "createdAt": "2026-10-30T08:00:00Z", "updatedAt": "2026-11-01T09:00:00Z",
+          "repository": { "nameWithOwner": "octo-org/mobile" }, "author": { "login": "you" },
+          "reviewDecision": null,
+          "commits": { "nodes": [ { "commit": { "statusCheckRollup": null } } ] }
+        }
+      ]
+    },
+    "mentions": {
+      "nodes": [
+        {
+          "__typename": "Issue", "number": 377, "title": "Login page is blank on Safari 17",
+          "createdAt": "2026-11-06T08:00:00Z", "updatedAt": "2026-11-09T08:00:00Z",
+          "repository": { "nameWithOwner": "octo-org/web-app" }, "author": null
+        }
+      ]
+    }
+  }
+}
