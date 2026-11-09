@@ -19,7 +19,7 @@ export const activity = defineSource({
     es: 'Las ejecuciones de Actions de tus repos, tus pull requests abiertas y las que te piden revisar, con un token o con el CLI gh.',
   },
   options: t.object({
-    host: t.string({ placeholder: 'github.com', label: { en: 'GitHub host', es: 'Servidor de GitHub' }, help: { en: 'Empty = github.com. A GitHub Enterprise Server host uses its /api/v3.', es: 'Vacío = github.com. Un servidor GitHub Enterprise usa su /api/v3.' } }),
+    host: t.string({ placeholder: 'github.com', risk: 'network', label: { en: 'GitHub host', es: 'Servidor de GitHub' }, help: { en: 'Empty = github.com. A GitHub Enterprise Server host uses its /api/v3.', es: 'Vacío = github.com. Un servidor GitHub Enterprise usa su /api/v3.' } }),
     token: t.string({
       secret: true,
       label: { en: 'Access token', es: 'Token de acceso' },
@@ -35,7 +35,7 @@ export const activity = defineSource({
     }),
     runsPerRepo: t.integer({ default: 10, min: 1, max: 30, advanced: true, label: { en: 'Runs read per repo', es: 'Ejecuciones leídas por repo' } }),
     mentions: t.boolean({ default: true, advanced: true, label: { en: 'Also look for mentions', es: 'Buscar también menciones' } }),
-    bin: t.string({ default: 'gh', format: 'path', advanced: true, label: { en: 'gh command', es: 'Comando gh' } }),
+    bin: t.string({ default: 'gh', format: 'path', risk: 'exec', advanced: true, label: { en: 'gh command', es: 'Comando gh' } }),
   }),
   intervalMs: 2 * 60_000,
   read: ({ options, signal }) => readGitHub(options, signal),
