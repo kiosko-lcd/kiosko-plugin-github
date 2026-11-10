@@ -2,7 +2,7 @@
  * GitHub at a glance, from one shared read: a GraphQL query for you, your
  * pull requests and the ones waiting for your review (plus, when no repos
  * are configured, your most recently pushed repos), one REST call per repo
- * for its Actions runs and one for the notifications count.
+ * for its Actions runs and one or two for the notifications count.
  *
  * REST calls carry `If-None-Match`: a 304 doesn't count against the rate
  * limit, so polling every couple of minutes is nearly free. When GitHub
@@ -14,7 +14,7 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { Localized } from '@kiosko/sdk';
+import { matchFilter, type Filter, type Localized } from '@kiosko/sdk';
 
 const execFileAsync = promisify(execFile);
 
@@ -61,7 +61,7 @@ export interface GitHubData {
   authored: PullRequest[];
   toReview: PullRequest[];
   mentions: PullRequest[];
-  /** Unread notifications; null when the token can't read them (fine-grained PATs can't). */
+  /** Unread notifications, up to `MAX_NOTIFICATIONS`; null when the token can't read them (fine-grained PATs can't). */
   notifications: number | null;
   /** Set while GitHub rate-limits us: when it lifts (epoch ms). The rest is the last good data. */
   rateLimitedUntil?: number;
@@ -76,12 +76,16 @@ export interface Connection {
   token: string;
   /** The `gh` command. */
   bin: string;
-  /** `owner/repo` list; empty = your most recently pushed repos. */
+  /** `owner/repo` list; empty = your `recentRepos` most recently pushed repos. */
   repos: string[];
+  /** Without `repos`: how many of your most recently pushed repos. */
+  recentRepos: number;
   /** Runs read per repo. */
   runsPerRepo: number;
-  /** Also search open issues and PRs that mention you. */
-  mentions: boolean;
+  /** Open issues and PRs that mention you, at most; 0 = don't look. */
+  maxMentions: number;
+  /** Search qualifiers added to every pull request search (`org:acme`, `-repo:acme/old`). */
+  query: string;
 }
 
 export interface Deps {
@@ -93,7 +97,7 @@ export interface Deps {
 
 const defaultDeps: Deps = {
   fetch: (...a) => fetch(...a),
-  exec: async (bin, args, signal) => (await execFileAsync(bin, args, { timeout: 10_000, signal })).stdout,
+  exec: async (bin, args, signal) => (await execFileAsync(bin, args, { signal })).stdout,
   now: () => Date.now(),
 };
 
@@ -117,13 +121,29 @@ const PR_FIELDS = `__typename
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }
   ... on Issue { number title createdAt updatedAt repository { nameWithOwner } author { login } }`;
 
-export const QUERY = `query($recent: Boolean!, $withMentions: Boolean!) {
+export const QUERY = `query($recent: Boolean!, $recentCount: Int!, $withMentions: Boolean!, $mentionsCount: Int!, $reviewQ: String!, $authoredQ: String!, $mentionsQ: String!) {
   viewer { login
-    repositories(first: 5, orderBy: { field: PUSHED_AT, direction: DESC }, ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], isArchived: false) @include(if: $recent) { nodes { nameWithOwner } } }
-  toReview: search(type: ISSUE, first: 30, query: "is:open is:pr archived:false review-requested:@me sort:created-asc") { nodes { ${PR_FIELDS} } }
-  authored: search(type: ISSUE, first: 30, query: "is:open is:pr archived:false author:@me sort:updated-desc") { nodes { ${PR_FIELDS} } }
-  mentions: search(type: ISSUE, first: 10, query: "is:open archived:false mentions:@me sort:updated-desc") @include(if: $withMentions) { nodes { ${PR_FIELDS} } }
+    repositories(first: $recentCount, orderBy: { field: PUSHED_AT, direction: DESC }, ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], isArchived: false) @include(if: $recent) { nodes { nameWithOwner } } }
+  toReview: search(type: ISSUE, first: 30, query: $reviewQ) { nodes { ${PR_FIELDS} } }
+  authored: search(type: ISSUE, first: 30, query: $authoredQ) { nodes { ${PR_FIELDS} } }
+  mentions: search(type: ISSUE, first: $mentionsCount, query: $mentionsQ) @include(if: $withMentions) { nodes { ${PR_FIELDS} } }
 }`;
+
+/** The GraphQL variables of one read: the three searches, with the user's qualifiers added. */
+export function queryVariables(c: Pick<Connection, 'repos' | 'recentRepos' | 'maxMentions' | 'query'>, hasRepos: boolean): Record<string, unknown> {
+  const extra = c.query.trim().replace(/\s+/g, ' ');
+  const q = (base: string) => (extra ? `${base} ${extra}` : base);
+  const mentions = Math.max(0, Math.min(50, Math.round(c.maxMentions) || 0));
+  return {
+    recent: !hasRepos,
+    recentCount: Math.max(1, Math.min(20, Math.round(c.recentRepos) || 5)),
+    withMentions: mentions > 0,
+    mentionsCount: Math.max(1, mentions),
+    reviewQ: q('is:open is:pr archived:false review-requested:@me sort:created-asc'),
+    authoredQ: q('is:open is:pr archived:false author:@me sort:updated-desc'),
+    mentionsQ: q('is:open archived:false mentions:@me sort:updated-desc'),
+  };
+}
 
 interface SearchNode {
   __typename?: string;
@@ -236,8 +256,8 @@ export function parseRuns(json: string, repo: string): Run[] {
 
 /* ---------- HTTP with ETags and rate limits ---------- */
 
-interface Cached { etag: string; body: string }
-/** ETag cache: `credential tail + url` → last 200 body. Module-wide, it lives as long as the plugin. */
+interface Cached { etag: string; body: string; link: string | null }
+/** ETag cache: `credential tail + url` → last 200 body (and its Link header). Module-wide, it lives as long as the plugin. */
 const etags = new Map<string, Cached>();
 /** Earliest time the notifications endpoint may be polled again (X-Poll-Interval). */
 let notificationsNotBefore = 0;
@@ -265,7 +285,7 @@ function rateLimit(res: Response, now: number): number | null {
   return null;
 }
 
-async function getJson(deps: Deps, token: string, url: string, signal: AbortSignal): Promise<{ status: number; body: string; headers: Headers }> {
+async function getJson(deps: Deps, token: string, url: string, signal: AbortSignal): Promise<{ status: number; body: string; headers: Headers; link: string | null }> {
   const key = `${token.slice(-8)} ${url}`;
   const cached = etags.get(key);
   const res = await deps.fetch(url, {
@@ -276,17 +296,48 @@ async function getJson(deps: Deps, token: string, url: string, signal: AbortSign
       'User-Agent': 'kiosko-plugin-github',
       ...(cached ? { 'If-None-Match': cached.etag } : {}),
     },
-    signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
+    signal,
   });
   const until = rateLimit(res, deps.now());
   if (until) throw new RateLimited(until);
-  if (res.status === 304 && cached) return { status: 200, body: cached.body, headers: res.headers };
+  if (res.status === 304 && cached) return { status: 200, body: cached.body, headers: res.headers, link: cached.link };
   const body = await res.text();
+  const link = res.headers.get('link');
   if (res.ok) {
     const etag = res.headers.get('etag');
-    if (etag) etags.set(key, { etag, body });
+    if (etag) etags.set(key, { etag, body, link });
   }
-  return { status: res.status, body, headers: res.headers };
+  return { status: res.status, body, headers: res.headers, link };
+}
+
+/** The `rel="next"` URL of a Link header, if any. */
+export function nextLink(link: string | null): string | null {
+  for (const part of (link ?? '').split(',')) {
+    const m = /<([^>]+)>\s*;\s*rel="?next"?/.exec(part);
+    if (m) return m[1]!;
+  }
+  return null;
+}
+
+/** GitHub serves at most 50 notifications a page; two pages tell a count from "99+". */
+export const MAX_NOTIFICATIONS = 100;
+
+/**
+ * Unread notifications, counted over up to two pages (`MAX_NOTIFICATIONS`):
+ * enough for the inbox's "99+". Null when the token can't read them.
+ */
+async function countNotifications(deps: Deps, token: string, rest: string, signal: AbortSignal): Promise<{ count: number | null; poll: number }> {
+  let url: string | null = `${rest}/notifications?per_page=50`;
+  let count = 0;
+  let poll = 0;
+  for (let page = 0; url && page * 50 < MAX_NOTIFICATIONS; page++) {
+    const r = await getJson(deps, token, url, signal);
+    if (page === 0) poll = Number(r.headers.get('x-poll-interval'));
+    if (r.status !== 200) return { count: page === 0 ? null : count, poll };
+    count += (JSON.parse(r.body) as unknown[]).length;
+    url = nextLink(r.link);
+  }
+  return { count: Math.min(count, MAX_NOTIFICATIONS), poll };
 }
 
 /** The token to use: the option, else gh's login; '' when there's neither. */
@@ -301,7 +352,7 @@ export async function resolveToken(c: Connection, deps: Deps, signal: AbortSigna
 
 const empty = (state: GitHubData['state']): GitHubData => ({ state, me: '', runs: [], authored: [], toReview: [], mentions: [], notifications: null });
 
-/** One read of everything the cards show. */
+/** One read of everything the cards show. `signal` aborts it (Kiosko aborts it after the source's `timeoutMs`). */
 export async function readGitHub(c: Connection, signal: AbortSignal, deps: Deps = defaultDeps): Promise<GitHubData> {
   const now = deps.now();
   if (now < rateLimitedUntil) return { ...(lastGood ?? empty('ok')), rateLimitedUntil };
@@ -313,8 +364,8 @@ export async function readGitHub(c: Connection, signal: AbortSignal, deps: Deps 
     const gq = await deps.fetch(api.graphql, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'User-Agent': 'kiosko-plugin-github' },
-      body: JSON.stringify({ query: QUERY, variables: { recent: repos.length === 0, withMentions: c.mentions } }),
-      signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
+      body: JSON.stringify({ query: QUERY, variables: queryVariables(c, repos.length > 0) }),
+      signal,
     });
     const until = rateLimit(gq, now);
     if (until) throw new RateLimited(until);
@@ -334,10 +385,9 @@ export async function readGitHub(c: Connection, signal: AbortSignal, deps: Deps 
     }));
 
     if (now >= notificationsNotBefore) {
-      const r = await getJson(deps, token, `${api.rest}/notifications?per_page=50`, signal);
-      const poll = Number(r.headers.get('x-poll-interval'));
+      const { count, poll } = await countNotifications(deps, token, api.rest, signal);
       notificationsNotBefore = now + (poll > 0 ? poll * 1000 : 60_000);
-      lastNotifications = r.status === 200 ? (JSON.parse(r.body) as unknown[]).length : null;
+      lastNotifications = count;
     }
 
     lastGood = {
@@ -362,34 +412,29 @@ export async function readGitHub(c: Connection, signal: AbortSignal, deps: Deps 
 
 /* ---------- presentation helpers ---------- */
 
+/** The alias of a repo (by name or full name), if it has one. */
+export function aliasOf(repo: string, aliases: Record<string, string> = {}): string | undefined {
+  return aliases[repo] ?? aliases[repo.split('/').pop() ?? repo];
+}
+
 /** `octo-org/web-app#412` → `web-app#412`; aliases (by repo name or full name) win; long names are cut. */
 export function shortRef(repo: string, number?: number, aliases: Record<string, string> = {}): string {
-  const name0 = repo.split('/').pop() ?? repo;
-  const name = aliases[repo] ?? aliases[name0] ?? name0;
+  const name = aliasOf(repo, aliases) ?? repo.split('/').pop() ?? repo;
   const cut = name.length > 10 ? `${name.slice(0, 9)}…` : name;
   return number === undefined ? cut : `${cut}#${number}`;
 }
 
-/** "3 h", "2 d", "5 wk", "1 y" (Spanish: "5 sem", "1 a"). */
-export function age(iso: string, now: number, locale = 'en'): string {
-  const es = /^es(?:$|[-_])/i.test(locale);
-  const h = Math.max(0, (now - Date.parse(iso)) / 3_600_000);
-  if (h < 24) return `${Math.max(1, Math.round(h))} h`;
-  const d = h / 24;
-  if (d < 14) return `${Math.round(d)} d`;
-  if (d < 365) return `${Math.round(d / 7)} ${es ? 'sem' : 'wk'}`;
-  return `${Math.round(d / 365)} ${es ? 'a' : 'y'}`;
+/** Whether a repo passes a `repos` filter: by its full name, its name or its alias. */
+export function inRepos(repo: string, repos: Filter, aliases: Record<string, string> = {}): boolean {
+  const alias = aliasOf(repo, aliases);
+  return matchFilter(alias ? [repo, alias] : repo, repos);
 }
 
-/** Run time: "42s", "3:07", "1:02:09". Running runs count up to `now`. */
-export function duration(run: Pick<Run, 'status' | 'startedAt' | 'updatedAt'>, now: number): string {
-  if (run.status === 'queued') return '';
+/** How long a run has taken, in ms: running ones up to `now`; null while queued. */
+export function runMs(run: Pick<Run, 'status' | 'startedAt' | 'updatedAt'>, now: number): number | null {
+  if (run.status === 'queued') return null;
   const end = run.status === 'in_progress' ? now : Date.parse(run.updatedAt);
-  const s = Math.max(0, Math.round((end - Date.parse(run.startedAt)) / 1000));
-  if (s < 60) return `${s}s`;
-  const two = (n: number) => String(n).padStart(2, '0');
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-  return h ? `${h}:${two(m)}:${two(s % 60)}` : `${m}:${two(s % 60)}`;
+  return Math.max(0, end - Date.parse(run.startedAt));
 }
 
 export interface Look {
@@ -400,6 +445,7 @@ export interface Look {
 }
 
 type Colors = { alert: string; warn: string; info: string; ok: string; inkDim: string };
+const PLAIN: Colors = { alert: '', warn: '', info: '', ok: '', inkDim: '' };
 
 /** How each run status is called and coloured, as gitlab's pipelines. */
 export function runLook(status: RunStatus, colors: Colors): Look {
@@ -436,9 +482,53 @@ export function latestRuns(runs: Run[]): Run[] {
   });
 }
 
-/** "14:05": when a rate limit lifts. */
-export function clock(ms: number, locale = 'en'): string {
-  return new Date(ms).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
+/** Options of `github/actions` that choose which runs it lists. */
+export interface RunFilter {
+  onlyLatest: boolean;
+  hidePassing: boolean;
+  repos: Filter;
+  branches: Filter;
+  aliases: Record<string, string>;
+}
+
+/** The runs `github/actions` lists: broken first, then the most recently started. */
+export function runItems(runs: Run[], o: RunFilter): Run[] {
+  return (o.onlyLatest ? latestRuns(runs) : runs)
+    .filter((r) => !(o.hidePassing && r.status === 'success') && inRepos(r.repo, o.repos, o.aliases) && matchFilter(r.branch, o.branches))
+    .map((r) => ({ r, rank: runLook(r.status, PLAIN).rank }))
+    .sort((a, b) => a.rank - b.rank || b.r.startedAt.localeCompare(a.r.startedAt))
+    .map((x) => x.r);
+}
+
+/** Options of `github/reviews` that choose which pull requests it lists. */
+export interface PullFilter {
+  includeMine: boolean;
+  includeMentions: boolean;
+  includeDrafts: boolean;
+  hideApproved: boolean;
+  repos: Filter;
+  aliases: Record<string, string>;
+}
+
+/**
+ * The pull requests `github/reviews` lists, each once: waiting for you
+ * (oldest first), then yours (most blocked first), then mentions. `mine`
+ * marks yours.
+ */
+export function pullItems(data: Pick<GitHubData, 'me' | 'toReview' | 'authored' | 'mentions'>, o: PullFilter): { p: PullRequest; mine: boolean }[] {
+  const ok = (p: PullRequest) => (o.includeDrafts || !p.draft) && !(o.hideApproved && p.review === 'approved') && inRepos(p.repo, o.repos, o.aliases);
+  const seen = new Set<string>();
+  const once = (p: PullRequest) => {
+    const k = `${p.repo}#${p.number}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  };
+  return [
+    ...data.toReview.filter(ok).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((p) => ({ p, mine: false })),
+    ...(o.includeMine ? data.authored.filter(ok).sort((a, b) => prLook(a, PLAIN).rank - prLook(b, PLAIN).rank || b.updatedAt.localeCompare(a.updatedAt)).map((p) => ({ p, mine: true })) : []),
+    ...(o.includeMentions ? data.mentions.filter((p) => p.author !== data.me && ok(p)).map((p) => ({ p, mine: false })) : []),
+  ].filter(({ p }) => once(p));
 }
 
 /** Sample data for the gallery: made-up repos and people. */

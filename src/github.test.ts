@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createCanvas } from '@napi-rs/canvas';
 import * as kit from '@loksly/lcd-canvas-kit';
+import { createBaseContext, DEFAULT_THEME, validate, type WidgetDefinition } from '@kiosko/sdk';
 import {
-  age, demoGitHub, duration, endpoints, hostName, latestRuns, parseRuns, parseViewer, prLook, readGitHub, resetState, runLook, runStatus, shortRef,
-  type Connection, type Deps,
+  demoGitHub, endpoints, hostName, inRepos, latestRuns, MAX_NOTIFICATIONS, nextLink, parseRuns, parseViewer, prLook, pullItems, queryVariables, readGitHub, resetState, runItems, runLook, runMs, runStatus, shortRef,
+  type Connection, type Deps, type GitHubData,
 } from './github.ts';
-import plugin from './index.ts';
+import plugin, { actions, inbox, reviews } from './index.ts';
 
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 const RUNS = fixture('workflow-runs.json');
@@ -16,7 +17,7 @@ const NOTIFS = fixture('notifications.json');
 const NOW = Date.parse('2026-11-09T10:12:00Z');
 const colors = { alert: 'r', warn: 'a', info: 'b', ok: 'v', inkDim: 'g' };
 
-const conn = (o: Partial<Connection> = {}): Connection => ({ host: '', token: 'ghp_test1234', bin: 'gh', repos: ['octo-org/web-app'], runsPerRepo: 10, mentions: true, ...o });
+const conn = (o: Partial<Connection> = {}): Connection => ({ host: '', token: 'ghp_test1234', bin: 'gh', repos: ['octo-org/web-app'], recentRepos: 5, runsPerRepo: 10, maxMentions: 10, query: '', ...o });
 
 interface Call { url: string; init?: RequestInit }
 
@@ -50,8 +51,9 @@ test('workflow runs: status folded, triggering actor, start time', () => {
   assert.equal(runs[0]!.title, 'Bump the router to v7');
   assert.equal(runs[1]!.actor, 'rerunner', 'whoever re-ran it');
   assert.equal(runs[2]!.actor, 'dependabot[bot]');
-  assert.equal(duration(runs[0]!, NOW), '6:28');
-  assert.equal(duration(runs[1]!, NOW), '1:55', 'running: counts up to now');
+  assert.equal(runMs(runs[0]!, NOW), (6 * 60 + 28) * 1000);
+  assert.equal(runMs(runs[1]!, NOW), (60 + 55) * 1000, 'running: counts up to now');
+  assert.equal(runMs({ ...runs[1]!, status: 'queued' }, NOW), null);
   assert.equal(runStatus('waiting', null), 'queued');
   assert.equal(runStatus('completed', 'timed_out'), 'failure');
   assert.equal(runStatus('completed', 'stale'), 'skipped');
@@ -141,23 +143,162 @@ test('read: fine-grained tokens without notifications, a repo without access, ba
   await assert.rejects(readGitHub(conn(), signal, deps(fakeGitHub({ graphql: () => new Response('{"message":"Bad credentials"}', { status: 401 }) }).fetch)), /401/);
 });
 
-test('short references, age and looks', () => {
+test('short references, the repos filter and looks', () => {
   assert.equal(shortRef('octo-org/web-app', 412), 'web-app#412');
   assert.equal(shortRef('octo-org/integration-tests', 120), 'integrati…#120');
   assert.equal(shortRef('octo-org/integration-tests', 120, { 'integration-tests': 'itest' }), 'itest#120');
   assert.equal(shortRef('octo-org/web-app'), 'web-app');
-  assert.equal(age('2026-11-09T07:12:00Z', NOW, 'es'), '3 h');
+  assert.ok(inRepos('octo-org/web-app', ['web-*']));
+  assert.ok(inRepos('octo-org/web-app', ['octo-org/*', '!*-old']));
+  assert.ok(!inRepos('octo-org/web-app', ['api']));
+  assert.ok(inRepos('octo-org/web-app', ['front'], { 'web-app': 'front' }), 'by alias');
   assert.ok(runLook('failure', colors).rank < runLook('in_progress', colors).rank && runLook('in_progress', colors).rank < runLook('success', colors).rank);
 });
 
+test('query variables: recent repos, mentions and extra qualifiers', () => {
+  const v = queryVariables(conn({ recentRepos: 12, maxMentions: 0, query: '  org:acme   -repo:acme/old ' }), false);
+  assert.equal(v.recent, true);
+  assert.equal(v.recentCount, 12);
+  assert.equal(v.withMentions, false);
+  assert.equal(v.reviewQ, 'is:open is:pr archived:false review-requested:@me sort:created-asc org:acme -repo:acme/old');
+  assert.match(String(v.authoredQ), /author:@me .* org:acme/);
+  const w = queryVariables(conn({ maxMentions: 25 }), true);
+  assert.deepEqual([w.recent, w.withMentions, w.mentionsCount, w.reviewQ], [false, true, 25, 'is:open is:pr archived:false review-requested:@me sort:created-asc']);
+});
+
+test('read: the recent repos count and the qualifiers go to GraphQL as variables', async () => {
+  const gh = fakeGitHub();
+  await readGitHub(conn({ repos: [], recentRepos: 9, query: 'org:"acme corp"' }), signal, deps(gh.fetch));
+  const body = JSON.parse(String(gh.calls[0]!.init!.body)) as { query: string; variables: Record<string, unknown> };
+  assert.equal(body.variables.recentCount, 9);
+  assert.match(String(body.variables.reviewQ), /org:"acme corp"$/);
+  assert.doesNotMatch(body.query, /acme/, 'user text never inside the query itself');
+});
+
+const notifs = (n: number, from = 0) => JSON.stringify(Array.from({ length: n }, (_, i) => ({ id: String(from + i) })));
+
+test('notifications: counted over two pages, so the inbox can tell 70 from "99+"', async () => {
+  const link = (page: number) => `<https://api.github.com/notifications?per_page=50&page=${page}>; rel="next", <https://api.github.com/notifications?per_page=50&page=4>; rel="last"`;
+  assert.equal(nextLink(link(2)), 'https://api.github.com/notifications?per_page=50&page=2');
+  assert.equal(nextLink('<https://x/a?page=3>; rel="last"'), null);
+  assert.equal(nextLink(null), null);
+  let pages = 0;
+  const seventy = fakeGitHub({ notifications: () => (++pages === 1 ? new Response(notifs(50), { headers: { Link: link(2) } }) : new Response(notifs(20, 50))) });
+  assert.equal((await readGitHub(conn(), signal, deps(seventy.fetch))).notifications, 70);
+  assert.equal(seventy.calls.filter((c) => c.url.includes('/notifications')).length, 2);
+  resetState();
+  const lots = fakeGitHub({ notifications: () => new Response(notifs(50), { headers: { Link: link(3) } }) });
+  const d = await readGitHub(conn(), signal, deps(lots.fetch));
+  assert.equal(d.notifications, MAX_NOTIFICATIONS);
+  assert.equal(lots.calls.filter((c) => c.url.includes('/notifications')).length, 2, 'never more than two pages');
+});
+
+test('notifications: a 304 keeps the count across pages (the Link header is cached with the body)', async () => {
+  const link = '<https://api.github.com/notifications?per_page=50&page=2>; rel="next"';
+  const gh = fakeGitHub({ notifications: () => new Response(null, { status: 304 }) });
+  let first = true;
+  const f = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes('/notifications') && first) {
+      if (url.includes('page=2')) { first = false; return new Response(notifs(5), { headers: { ETag: '"p2"' } }); }
+      return new Response(notifs(50), { headers: { ETag: '"p1"', Link: link } });
+    }
+    return gh.fetch(input, init);
+  }) as typeof fetch;
+  assert.equal((await readGitHub(conn(), signal, deps(f))).notifications, 55);
+  const later = await readGitHub(conn(), signal, deps(f, { now: () => NOW + 120_000 }));
+  assert.equal(later.notifications, 55);
+});
+
+const data = demoGitHub(NOW);
+const runOpts = { onlyLatest: true, hidePassing: false, repos: [] as string[], branches: [] as string[], aliases: {} as Record<string, string> };
+const pullOpts = { includeMine: true, includeMentions: false, includeDrafts: false, hideApproved: false, repos: [] as string[], aliases: {} as Record<string, string> };
+
+test('actions: broken first, hidePassing, repos and branches filters', () => {
+  assert.deepEqual(runItems(data.runs, runOpts).map((r) => r.status), ['failure', 'in_progress', 'queued', 'success', 'success', 'cancelled']);
+  assert.ok(!runItems(data.runs, { ...runOpts, hidePassing: true }).some((r) => r.status === 'success'));
+  assert.deepEqual([...new Set(runItems(data.runs, { ...runOpts, repos: ['api'] }).map((r) => r.repo))], ['octo-org/api']);
+  assert.ok(runItems(data.runs, { ...runOpts, repos: ['octo-org/*'] }).every((r) => r.repo.startsWith('octo-org/')));
+  assert.deepEqual(runItems(data.runs, { ...runOpts, branches: ['fix/*'] }).map((r) => r.branch), ['fix/login-flake']);
+  assert.ok(!runItems(data.runs, { ...runOpts, branches: ['!fix/*'] }).some((r) => r.branch.startsWith('fix/')));
+});
+
+test('pull requests: to review first, mine, mentions, drafts, hideApproved and repos', () => {
+  const refs = (o = {}) => pullItems(data, { ...pullOpts, ...o }).map(({ p, mine }) => `${p.repo.split('/')[1]}#${p.number}${mine ? '*' : ''}`);
+  assert.deepEqual(refs(), ['infra#12', 'api#91', 'web-app#398', 'web-app#412*', 'api#88*', 'web-app#405*']);
+  assert.deepEqual(refs({ includeMine: false }), ['infra#12', 'api#91', 'web-app#398']);
+  assert.ok(refs({ includeDrafts: true }).includes('mobile#17*'));
+  assert.ok(!refs({ hideApproved: true }).includes('web-app#405*'));
+  assert.deepEqual(refs({ includeMentions: true }).at(-1), 'web-app#377');
+  assert.deepEqual(refs({ repos: ['api'] }), ['api#91', 'api#88*']);
+});
+
+/** Renders a widget and returns every text it drew, in order. */
+function texts(w: WidgetDefinition<any, any>, options: Record<string, unknown>, d: GitHubData, size = { w: 600, h: 220 }, locale = 'en'): string[] {
+  const out: string[] = [];
+  const spy = { ...kit, drawTracked: (...a: Parameters<typeof kit.drawTracked>) => (out.push(a[1]), kit.drawTracked(...a)) };
+  const canvas = createCanvas(size.w, size.h);
+  const theme = DEFAULT_THEME;
+  w.render(canvas.getContext('2d'), {
+    ...createBaseContext({ now: NOW, locale, timeFormat: '24h' }), options: validate(w.options!, options).value, data: undefined, sources: { 'github/activity': d }, working: true,
+    box: { x: 0, y: 0, w: size.w, h: size.h }, theme, fonts: theme.fonts, kit: spy, canvas: { createCanvas, loadImage: (() => {}) as never }, preview: false,
+  } as never);
+  return out;
+}
+
+const manyRuns = (n: number): GitHubData => ({ ...data, runs: Array.from({ length: n }, (_, i) => ({ ...data.runs[0]!, id: i, workflow: `WF${i}`, branch: `b${i}` })) });
+const manyPulls = (n: number): GitHubData => ({ ...data, authored: [], toReview: Array.from({ length: n }, (_, i) => ({ ...data.toReview[0]!, number: i, title: `PR ${i}` })) });
+
+test('actions: rows, layout and "+N more"; timers from ctx.fmt', () => {
+  const titles = (t: string[]) => t.filter((x) => x.startsWith('WF')).length;
+  let t = texts(actions, { rows: 4 }, manyRuns(10));
+  assert.equal(titles(t), 4);
+  assert.ok(t.includes('+6 more'));
+  t = texts(actions, { layout: 'detailed' }, manyRuns(10));
+  assert.ok(titles(t) < 10 && t.includes(`+${10 - titles(t)} more`));
+  t = texts(actions, {}, data);
+  assert.ok(t.includes('running 3 min'), t.join('|'));
+  assert.ok(texts(actions, {}, data, undefined, 'es').includes('en curso 3 min'));
+  t = texts(actions, { layout: 'detailed' }, data);
+  assert.ok(t.some((x) => x === 'web-app · sam · 6 min'), t.join('|'));
+});
+
+test('reviews: no silent cuts; auto goes one line when that shows more', () => {
+  const titles = (t: string[]) => t.filter((x) => x.startsWith('PR ')).length;
+  let t = texts(reviews, { layout: 'detailed' }, manyPulls(9));
+  assert.ok(titles(t) < 9 && t.includes(`+${9 - titles(t)} more`));
+  t = texts(reviews, {}, manyPulls(7));
+  assert.equal(titles(t), 7);
+  t = texts(reviews, {}, data, { w: 600, h: 420 });
+  assert.ok(t.includes('web-app#412 · yours · 1 d'), t.join('|'));
+});
+
+test('inbox: a token without notifications shows two numbers, not a dash; "99+"', () => {
+  assert.deepEqual(texts(inbox, {}, data).filter((_, i) => i % 2 === 0), ['3', '1', '7']);
+  assert.deepEqual(texts(inbox, {}, { ...data, notifications: null }).filter((_, i) => i % 2 === 0), ['3', '1']);
+  assert.ok(texts(inbox, {}, { ...data, notifications: 100 }).includes('99+'));
+});
+
+test('empty lists and states: message, hidden when asked, rate-limit hint in the clock format', () => {
+  const none: GitHubData = { ...data, runs: [], toReview: [], authored: [], mentions: [] };
+  assert.deepEqual(texts(actions, {}, none), ['No recent workflow runs']);
+  const state = (w: WidgetDefinition<any, any>, d: GitHubData | undefined) => ({ options: validate(w.options!, {}).value, data: undefined, sources: { 'github/activity': d }, now: NOW, working: true }) as never;
+  assert.equal(reviews.empty!(state(reviews, none)), true);
+  assert.equal(reviews.empty!(state(reviews, { ...none, state: 'unconfigured' })), false, 'not configured: says so');
+  assert.equal(actions.empty!(state(actions, undefined)), false);
+  assert.equal(reviews.hideWhenEmpty, true);
+  assert.ok(!actions.hideWhenEmpty);
+  const until = new Date(NOW + 600_000);
+  const hint = `rate-limited, resumes ${String(until.getHours()).padStart(2, '0')}:${String(until.getMinutes()).padStart(2, '0')}`;
+  assert.ok(texts(actions, {}, { ...data, rateLimitedUntil: until.getTime() }).includes(hint));
+});
+
 test('plugin: every widget reads the shared source, has demo data and paints every state', () => {
-  assert.equal(plugin.sources?.[0]?.id, 'activity');
-  const token = (plugin.sources?.[0]?.options as { props: Record<string, { secret?: boolean }> }).props.token;
+  const source = plugin.sources?.[0];
+  assert.equal(source?.id, 'activity');
+  assert.ok((source?.minIntervalMs ?? 0) >= 60_000, 'a floor for the API');
+  const token = (source?.options as { props: Record<string, { secret?: boolean }> }).props.token;
   assert.equal(token?.secret, true);
-  const theme = {
-    colors: { bg: '#000', surface: '#111', surfaceEdge: '#222', ink: '#fff', inkDim: '#aaa', inkFaint: '#555', accent: '#0af', alert: '#f00', warn: '#fa0', info: '#0af', ok: '#0f0' },
-    fonts: { sans: 'sans-serif', sansBold: 'sans-serif', mono: 'monospace', monoBold: 'monospace' },
-  };
   const demo = demoGitHub(NOW);
   const states = [demo, { ...demo, rateLimitedUntil: NOW + 600_000 }, { ...demo, state: 'unconfigured' as const }, { ...demo, runs: [], toReview: [], authored: [], mentions: [] }];
   for (const w of plugin.widgets ?? []) {
@@ -165,14 +306,7 @@ test('plugin: every widget reads the shared source, has demo data and paints eve
     assert.ok(w.icon && w.category && w.size?.preferred, w.id);
     assert.ok(w.demo!({ options: w.options!.default, now: NOW, locale: 'en' }).sources?.['github/activity'], w.id);
     for (const size of [w.size!.min!, w.size!.preferred!, { w: 300, h: 420 }]) {
-      for (const data of states) {
-        const c = createCanvas(size.w, size.h);
-        const g = c.getContext('2d');
-        w.render(g, {
-          options: w.options!.default, data: undefined, sources: { 'github/activity': data }, now: NOW, working: true, locale: 'es', t: (x: string | { en: string; es?: string }) => (typeof x === 'string' ? x : (x.es ?? x.en)),
-          log: () => {}, dataDir: '/tmp', box: { x: 0, y: 0, w: size.w, h: size.h }, theme: theme as never, fonts: theme.fonts, kit, canvas: { createCanvas, loadImage: (() => {}) as never }, preview: true,
-        } as never);
-      }
+      for (const d of states) for (const options of [{}, { rows: 3 }, { layout: 'detailed' }, { layout: 'one-line' }]) texts(w, options, d, size, 'es');
     }
   }
 });
