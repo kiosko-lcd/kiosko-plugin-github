@@ -275,7 +275,7 @@ export const inbox = defineWidget({
 export default definePlugin({
   id: 'github',
   name: { en: 'GitHub', es: 'GitHub' },
-  version: '0.1.0',
+  version: '0.2.0',
   description: { en: 'Your Actions runs, the pull requests waiting for your review and your own.', es: 'Tus ejecuciones de Actions, las pull requests que te toca revisar y las tuyas.' },
   author: 'Kiosko',
   license: 'MIT',
