@@ -1,0 +1,699 @@
+{
+  "manifest": 1,
+  "id": "github",
+  "package": "kiosko-plugin-github",
+  "name": {
+    "en": "GitHub",
+    "es": "GitHub"
+  },
+  "version": "0.2.0",
+  "description": {
+    "en": "Your Actions runs, the pull requests waiting for your review and your own.",
+    "es": "Tus ejecuciones de Actions, las pull requests que te toca revisar y las tuyas."
+  },
+  "author": "Kiosko",
+  "license": "MIT",
+  "homepage": "https://github.com/kiosko-lcd/kiosko-plugin-github#readme",
+  "repository": "https://github.com/kiosko-lcd/kiosko-plugin-github.git",
+  "icon": "github",
+  "sdk": "^0.2.0",
+  "platforms": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "languages": [
+    "en",
+    "es"
+  ],
+  "categories": [
+    "dev"
+  ],
+  "tags": [
+    "github",
+    "ci",
+    "code review",
+    "notifications"
+  ],
+  "permissions": {
+    "network": [
+      "api.github.com",
+      "user"
+    ],
+    "exec": [
+      "gh"
+    ]
+  },
+  "riskyOptions": [
+    {
+      "path": "github/activity: host",
+      "risk": [
+        "network"
+      ],
+      "secret": false
+    },
+    {
+      "path": "github/activity: token",
+      "risk": [],
+      "secret": true
+    },
+    {
+      "path": "github/activity: bin",
+      "risk": [
+        "exec"
+      ],
+      "secret": false
+    }
+  ],
+  "requires": [],
+  "optional": [],
+  "widgets": [
+    {
+      "type": "github/actions",
+      "name": {
+        "en": "Actions runs",
+        "es": "Ejecuciones de Actions"
+      },
+      "description": {
+        "en": "Recent GitHub Actions workflow runs: broken first, then running (with a timer) and queued, passing last.",
+        "es": "Las últimas ejecuciones de GitHub Actions: lo roto primero, luego lo que corre (con cronómetro) y espera, lo que pasa al final."
+      },
+      "icon": "git-pull-request",
+      "category": "dev",
+      "tags": [
+        "github",
+        "ci"
+      ],
+      "size": {
+        "min": {
+          "w": 280,
+          "h": 100
+        },
+        "preferred": {
+          "w": 600,
+          "h": 220
+        }
+      },
+      "chrome": "card",
+      "sources": [
+        "github/activity"
+      ],
+      "options": {
+        "default": {
+          "rows": 0,
+          "layout": "auto",
+          "repos": [],
+          "branches": [],
+          "hidePassing": false,
+          "onlyLatest": true,
+          "aliases": {}
+        },
+        "x-ui": {},
+        "type": "object",
+        "properties": {
+          "rows": {
+            "title": "Rows",
+            "description": "0 = as many as fit. A number shows that many, in rows of a readable size (fewer when the tile is too small for them); the rest are counted in \"+N more\".",
+            "default": 0,
+            "x-ui": {
+              "label": {
+                "en": "Rows",
+                "es": "Filas"
+              },
+              "help": {
+                "en": "0 = as many as fit. A number shows that many, in rows of a readable size (fewer when the tile is too small for them); the rest are counted in \"+N more\".",
+                "es": "0 = las que quepan. Con un número se ven esas, en filas de un tamaño legible (menos si la tesela no da para ellas); el resto se cuenta en «+N más»."
+              }
+            },
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30
+          },
+          "layout": {
+            "title": "Row layout",
+            "description": "Automatic: the widget picks by the tile's shape.",
+            "default": "auto",
+            "x-ui": {
+              "label": {
+                "en": "Row layout",
+                "es": "Formato de fila"
+              },
+              "help": {
+                "en": "Automatic: the widget picks by the tile's shape.",
+                "es": "Automático: el widget elige según la forma de la tesela."
+              },
+              "labels": {
+                "auto": {
+                  "en": "Automatic",
+                  "es": "Automático"
+                },
+                "one-line": {
+                  "en": "One line",
+                  "es": "Una línea"
+                },
+                "detailed": {
+                  "en": "Detailed",
+                  "es": "Detallado"
+                }
+              }
+            },
+            "type": "string",
+            "enum": [
+              "auto",
+              "one-line",
+              "detailed"
+            ]
+          },
+          "repos": {
+            "title": "Repositories",
+            "description": "Empty: all. Names or patterns, comma-separated: * matches anything, a leading ! leaves out (web, acme/*, !*-old).",
+            "default": [],
+            "x-ui": {
+              "label": {
+                "en": "Repositories",
+                "es": "Repositorios"
+              },
+              "help": {
+                "en": "Empty: all. Names or patterns, comma-separated: * matches anything, a leading ! leaves out (web, acme/*, !*-old).",
+                "es": "Vacío: todos. Nombres o patrones separados por comas: * vale por cualquier cosa y un ! delante excluye (web, acme/*, !*-old)."
+              },
+              "widget": "filter",
+              "choices": {
+                "source": "github/activity",
+                "list": "repos"
+              }
+            },
+            "type": "array",
+            "items": {
+              "default": "",
+              "x-ui": {
+                "placeholder": "name, group/*, !old-*",
+                "choices": {
+                  "source": "github/activity",
+                  "list": "repos"
+                }
+              },
+              "type": "string"
+            },
+            "x-filter": true
+          },
+          "branches": {
+            "title": "Branches",
+            "description": "Empty: every branch. Names or patterns, comma-separated (main, release/*, !dependabot/*).",
+            "default": [],
+            "x-ui": {
+              "label": {
+                "en": "Branches",
+                "es": "Ramas"
+              },
+              "help": {
+                "en": "Empty: every branch. Names or patterns, comma-separated (main, release/*, !dependabot/*).",
+                "es": "Vacío: todas las ramas. Nombres o patrones separados por comas (main, release/*, !dependabot/*)."
+              },
+              "widget": "filter"
+            },
+            "type": "array",
+            "items": {
+              "default": "",
+              "x-ui": {
+                "placeholder": "name, group/*, !old-*"
+              },
+              "type": "string"
+            },
+            "x-filter": true
+          },
+          "hidePassing": {
+            "title": "Hide passing runs",
+            "description": "Only what is broken, running or waiting.",
+            "default": false,
+            "x-ui": {
+              "label": {
+                "en": "Hide passing runs",
+                "es": "Ocultar las ejecuciones que pasan"
+              },
+              "help": {
+                "en": "Only what is broken, running or waiting.",
+                "es": "Sólo lo roto, lo que corre y lo que espera."
+              }
+            },
+            "type": "boolean"
+          },
+          "onlyLatest": {
+            "title": "Only the latest run per workflow and branch",
+            "default": true,
+            "x-ui": {
+              "label": {
+                "en": "Only the latest run per workflow and branch",
+                "es": "Solo la última ejecución por workflow y rama"
+              }
+            },
+            "type": "boolean"
+          },
+          "aliases": {
+            "title": "Short repo names",
+            "description": "Repo (name or owner/name) → what to show, e.g. web-frontend → web.",
+            "default": {},
+            "x-ui": {
+              "label": {
+                "en": "Short repo names",
+                "es": "Nombres cortos de repo"
+              },
+              "help": {
+                "en": "Repo (name or owner/name) → what to show, e.g. web-frontend → web.",
+                "es": "Repo (nombre u owner/nombre) → lo que se muestra, p. ej. web-frontend → web."
+              },
+              "advanced": true
+            },
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "screenshot": "docs/actions.png",
+      "animated": false,
+      "urgent": false
+    },
+    {
+      "type": "github/reviews",
+      "name": {
+        "en": "Pull requests",
+        "es": "Pull requests"
+      },
+      "description": {
+        "en": "Pull requests waiting for your review (whose, how long they have waited, how their checks are doing), then your own with what blocks them: failing checks, changes requested, approved. Mentions last, if you want them.",
+        "es": "Las pull requests que te toca revisar (de quién son, cuánto llevan esperando, cómo van sus checks) y luego las tuyas con lo que las frena: checks que fallan, cambios pedidos, aprobada. Las menciones al final, si las quieres."
+      },
+      "icon": "git-branch",
+      "category": "dev",
+      "tags": [
+        "github",
+        "code review"
+      ],
+      "size": {
+        "min": {
+          "w": 280,
+          "h": 100
+        },
+        "preferred": {
+          "w": 600,
+          "h": 220
+        }
+      },
+      "chrome": "card",
+      "sources": [
+        "github/activity"
+      ],
+      "options": {
+        "default": {
+          "rows": 0,
+          "layout": "auto",
+          "repos": [],
+          "includeMine": true,
+          "includeMentions": false,
+          "includeDrafts": false,
+          "hideApproved": false,
+          "aliases": {}
+        },
+        "x-ui": {},
+        "type": "object",
+        "properties": {
+          "rows": {
+            "title": "Rows",
+            "description": "0 = as many as fit. A number shows that many, in rows of a readable size (fewer when the tile is too small for them); the rest are counted in \"+N more\".",
+            "default": 0,
+            "x-ui": {
+              "label": {
+                "en": "Rows",
+                "es": "Filas"
+              },
+              "help": {
+                "en": "0 = as many as fit. A number shows that many, in rows of a readable size (fewer when the tile is too small for them); the rest are counted in \"+N more\".",
+                "es": "0 = las que quepan. Con un número se ven esas, en filas de un tamaño legible (menos si la tesela no da para ellas); el resto se cuenta en «+N más»."
+              }
+            },
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30
+          },
+          "layout": {
+            "title": "Row layout",
+            "description": "Automatic: the widget picks by the tile's shape.",
+            "default": "auto",
+            "x-ui": {
+              "label": {
+                "en": "Row layout",
+                "es": "Formato de fila"
+              },
+              "help": {
+                "en": "Automatic: the widget picks by the tile's shape.",
+                "es": "Automático: el widget elige según la forma de la tesela."
+              },
+              "labels": {
+                "auto": {
+                  "en": "Automatic",
+                  "es": "Automático"
+                },
+                "one-line": {
+                  "en": "One line",
+                  "es": "Una línea"
+                },
+                "detailed": {
+                  "en": "Detailed",
+                  "es": "Detallado"
+                }
+              }
+            },
+            "type": "string",
+            "enum": [
+              "auto",
+              "one-line",
+              "detailed"
+            ]
+          },
+          "repos": {
+            "title": "Repositories",
+            "description": "Empty: all. Names or patterns, comma-separated: * matches anything, a leading ! leaves out (web, acme/*, !*-old).",
+            "default": [],
+            "x-ui": {
+              "label": {
+                "en": "Repositories",
+                "es": "Repositorios"
+              },
+              "help": {
+                "en": "Empty: all. Names or patterns, comma-separated: * matches anything, a leading ! leaves out (web, acme/*, !*-old).",
+                "es": "Vacío: todos. Nombres o patrones separados por comas: * vale por cualquier cosa y un ! delante excluye (web, acme/*, !*-old)."
+              },
+              "widget": "filter",
+              "choices": {
+                "source": "github/activity",
+                "list": "repos"
+              }
+            },
+            "type": "array",
+            "items": {
+              "default": "",
+              "x-ui": {
+                "placeholder": "name, group/*, !old-*",
+                "choices": {
+                  "source": "github/activity",
+                  "list": "repos"
+                }
+              },
+              "type": "string"
+            },
+            "x-filter": true
+          },
+          "includeMine": {
+            "title": "Include my own pull requests",
+            "default": true,
+            "x-ui": {
+              "label": {
+                "en": "Include my own pull requests",
+                "es": "Incluir mis pull requests"
+              }
+            },
+            "type": "boolean"
+          },
+          "includeMentions": {
+            "title": "Include mentions",
+            "description": "Needs mentions read in the source (Mentions read above 0).",
+            "default": false,
+            "x-ui": {
+              "label": {
+                "en": "Include mentions",
+                "es": "Incluir menciones"
+              },
+              "help": {
+                "en": "Needs mentions read in the source (Mentions read above 0).",
+                "es": "Necesita que la fuente lea menciones (Menciones leídas por encima de 0)."
+              }
+            },
+            "type": "boolean"
+          },
+          "includeDrafts": {
+            "title": "Include drafts",
+            "default": false,
+            "x-ui": {
+              "label": {
+                "en": "Include drafts",
+                "es": "Incluir borradores"
+              }
+            },
+            "type": "boolean"
+          },
+          "hideApproved": {
+            "title": "Hide approved pull requests",
+            "default": false,
+            "x-ui": {
+              "label": {
+                "en": "Hide approved pull requests",
+                "es": "Ocultar las pull requests aprobadas"
+              }
+            },
+            "type": "boolean"
+          },
+          "aliases": {
+            "title": "Short repo names",
+            "description": "Repo (name or owner/name) → what to show, e.g. web-frontend → web.",
+            "default": {},
+            "x-ui": {
+              "label": {
+                "en": "Short repo names",
+                "es": "Nombres cortos de repo"
+              },
+              "help": {
+                "en": "Repo (name or owner/name) → what to show, e.g. web-frontend → web.",
+                "es": "Repo (nombre u owner/nombre) → lo que se muestra, p. ej. web-frontend → web."
+              },
+              "advanced": true
+            },
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "screenshot": "docs/reviews.png",
+      "animated": false,
+      "urgent": false
+    },
+    {
+      "type": "github/inbox",
+      "name": {
+        "en": "GitHub inbox",
+        "es": "Buzón de GitHub"
+      },
+      "description": {
+        "en": "Three numbers: reviews waiting for you, failing runs and unread notifications (when the token can read them). Coloured only when they ask for you.",
+        "es": "Tres números: revisiones pendientes, ejecuciones que fallan y notificaciones sin leer (si el token puede leerlas). Con color solo cuando te reclaman."
+      },
+      "icon": "bell",
+      "category": "dev",
+      "tags": [
+        "github",
+        "notifications"
+      ],
+      "size": {
+        "min": {
+          "w": 160,
+          "h": 70
+        },
+        "preferred": {
+          "w": 300,
+          "h": 110
+        }
+      },
+      "chrome": "card",
+      "sources": [
+        "github/activity"
+      ],
+      "options": {
+        "default": {},
+        "x-ui": {},
+        "type": "object",
+        "properties": {}
+      },
+      "screenshot": "docs/inbox.png",
+      "animated": false,
+      "urgent": false
+    }
+  ],
+  "sources": [
+    {
+      "type": "github/activity",
+      "name": {
+        "en": "GitHub activity",
+        "es": "Actividad de GitHub"
+      },
+      "description": {
+        "en": "Actions runs of your repos, your open pull requests and the ones you are asked to review, through a token or the gh CLI.",
+        "es": "Las ejecuciones de Actions de tus repos, tus pull requests abiertas y las que te piden revisar, con un token o con el CLI gh."
+      },
+      "polled": true,
+      "intervalMs": 120000,
+      "options": {
+        "default": {
+          "host": "",
+          "token": "",
+          "repos": [],
+          "recentRepos": 5,
+          "query": "",
+          "runsPerRepo": 10,
+          "maxMentions": 10,
+          "bin": "gh"
+        },
+        "x-ui": {},
+        "type": "object",
+        "properties": {
+          "host": {
+            "title": "GitHub host",
+            "description": "Empty = github.com. A GitHub Enterprise Server host uses its /api/v3.",
+            "default": "",
+            "x-ui": {
+              "label": {
+                "en": "GitHub host",
+                "es": "Servidor de GitHub"
+              },
+              "help": {
+                "en": "Empty = github.com. A GitHub Enterprise Server host uses its /api/v3.",
+                "es": "Vacío = github.com. Un servidor GitHub Enterprise usa su /api/v3."
+              },
+              "placeholder": "github.com"
+            },
+            "x-risk": "network",
+            "type": "string"
+          },
+          "token": {
+            "title": "Access token",
+            "description": "Fine-grained token with read access to Actions, Pull requests and Metadata, or a classic one with repo and read:org (and notifications for the inbox count). Empty = use the gh CLI and its login. Secret: leave it empty (or a placeholder such as \"<token>\"). Kiosko keeps the value it already has, or asks for it in the editor.",
+            "default": "",
+            "x-ui": {
+              "label": {
+                "en": "Access token",
+                "es": "Token de acceso"
+              },
+              "help": {
+                "en": "Fine-grained token with read access to Actions, Pull requests and Metadata, or a classic one with repo and read:org (and notifications for the inbox count). Empty = use the gh CLI and its login.",
+                "es": "Token fine-grained con lectura de Actions, Pull requests y Metadata, o uno clásico con repo y read:org (y notifications para el contador del buzón). Vacío = usar el CLI gh y su sesión."
+              },
+              "secret": true
+            },
+            "x-secret": true,
+            "type": "string"
+          },
+          "repos": {
+            "title": "Repositories for Actions",
+            "description": "owner/repo. Empty = your most recently pushed repos.",
+            "default": [],
+            "x-ui": {
+              "label": {
+                "en": "Repositories for Actions",
+                "es": "Repositorios para Actions"
+              },
+              "help": {
+                "en": "owner/repo. Empty = your most recently pushed repos.",
+                "es": "owner/repo. Vacío = tus repos con push más reciente."
+              }
+            },
+            "type": "array",
+            "items": {
+              "default": "",
+              "x-ui": {
+                "placeholder": "owner/repo"
+              },
+              "type": "string"
+            },
+            "maxItems": 20
+          },
+          "recentRepos": {
+            "title": "Recent repos for Actions",
+            "description": "Without a list of repositories: how many of your most recently pushed ones. Each costs one call per read.",
+            "default": 5,
+            "x-ui": {
+              "label": {
+                "en": "Recent repos for Actions",
+                "es": "Repos recientes para Actions"
+              },
+              "help": {
+                "en": "Without a list of repositories: how many of your most recently pushed ones. Each costs one call per read.",
+                "es": "Sin lista de repositorios: cuántos de los que tienen push más reciente. Cada uno cuesta una llamada por lectura."
+              }
+            },
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "query": {
+            "title": "Extra search qualifiers",
+            "description": "Added to the pull request searches, e.g. org:acme or -repo:acme/old. Empty = everything you can see.",
+            "default": "",
+            "x-ui": {
+              "label": {
+                "en": "Extra search qualifiers",
+                "es": "Calificadores de búsqueda extra"
+              },
+              "help": {
+                "en": "Added to the pull request searches, e.g. org:acme or -repo:acme/old. Empty = everything you can see.",
+                "es": "Se añaden a las búsquedas de pull requests, p. ej. org:acme o -repo:acme/old. Vacío = todo lo que ves."
+              },
+              "placeholder": "org:acme"
+            },
+            "type": "string"
+          },
+          "runsPerRepo": {
+            "title": "Runs read per repo",
+            "default": 10,
+            "x-ui": {
+              "label": {
+                "en": "Runs read per repo",
+                "es": "Ejecuciones leídas por repo"
+              },
+              "advanced": true
+            },
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          },
+          "maxMentions": {
+            "title": "Mentions read",
+            "description": "Open issues and pull requests that mention you, at most. 0 = don't look for mentions.",
+            "default": 10,
+            "x-ui": {
+              "label": {
+                "en": "Mentions read",
+                "es": "Menciones leídas"
+              },
+              "help": {
+                "en": "Open issues and pull requests that mention you, at most. 0 = don't look for mentions.",
+                "es": "Issues y pull requests abiertas que te mencionan, como mucho. 0 = no buscar menciones."
+              },
+              "advanced": true
+            },
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 50
+          },
+          "bin": {
+            "title": "gh command",
+            "default": "gh",
+            "x-ui": {
+              "label": {
+                "en": "gh command",
+                "es": "Comando gh"
+              },
+              "advanced": true,
+              "format": "path"
+            },
+            "x-risk": "exec",
+            "type": "string"
+          }
+        }
+      }
+    }
+  ],
+  "interludes": [],
+  "templates": []
+}

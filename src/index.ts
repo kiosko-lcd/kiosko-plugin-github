@@ -59,6 +59,15 @@ export const activity = defineSource({
   timeoutMs: 30_000,
   read: ({ options, signal }) => readGitHub(options, signal),
   demo: ({ now }) => demoGitHub(now),
+  // Every repo it has seen (runs and pull requests), for the widgets' filter.
+  choices: {
+    repos: (d) => {
+      if (!d || d.state !== 'ok') return [];
+      const runs = new Set(d.runs.map((r) => r.repo));
+      const pulls = new Set([...d.authored, ...d.toReview, ...d.mentions].map((p) => p.repo));
+      return [...new Set([...runs, ...pulls])].sort((a, b) => a.localeCompare(b)).map((value) => ({ value, group: runs.has(value) ? 'Actions' : 'Pull requests' }));
+    },
+  },
 });
 
 const aliasesField = () =>
@@ -70,7 +79,7 @@ const aliasesField = () =>
     valueLabel: { en: 'Show as', es: 'Mostrar como' },
   });
 
-const reposField = () => t.filter({ label: { en: 'Repositories', es: 'Repositorios' } });
+const reposField = () => t.filter({ label: { en: 'Repositories', es: 'Repositorios' }, choices: { source: 'github/activity', list: 'repos' } });
 
 const dataOf = (sources: Record<string, unknown>) => sources[SOURCE] as GitHubData | undefined;
 const demo = ({ now }: { now: number }) => ({ sources: { [SOURCE]: demoGitHub(now) } });
@@ -276,6 +285,8 @@ export default definePlugin({
   id: 'github',
   name: { en: 'GitHub', es: 'GitHub' },
   version: '0.2.0',
+  sdk: '^0.2.0',
+  permissions: { network: ['api.github.com', 'user'], exec: ['gh'] },
   description: { en: 'Your Actions runs, the pull requests waiting for your review and your own.', es: 'Tus ejecuciones de Actions, las pull requests que te toca revisar y las tuyas.' },
   author: 'Kiosko',
   license: 'MIT',
