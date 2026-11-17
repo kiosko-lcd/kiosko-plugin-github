@@ -20,6 +20,11 @@ npm install --prefix ~/.config/kiosko/plugins kiosko-plugin-github
 
 - [`gh`](https://cli.github.com) logged in (`gh auth login`), or a token in the source options: fine-grained with read access to Actions, Pull requests and Metadata, or classic with `repo` and `read:org` (plus `notifications` for the unread count). GitHub Enterprise Server: set the host.
 
+## What it does on your machine
+
+- **Internet**: contacts `api.github.com`, the ones you set in its options.
+- **Runs**: `gh`.
+
 ## Widgets
 
 ### Actions runs — `github/actions`
