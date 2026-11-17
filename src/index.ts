@@ -284,7 +284,7 @@ export const inbox = defineWidget({
 export default definePlugin({
   id: 'github',
   name: { en: 'GitHub', es: 'GitHub' },
-  version: '0.2.0',
+  version: '0.2.1',
   sdk: '^0.2.0',
   permissions: { network: ['api.github.com', 'user'], exec: ['gh'] },
   description: { en: 'Your Actions runs, the pull requests waiting for your review and your own.', es: 'Tus ejecuciones de Actions, las pull requests que te toca revisar y las tuyas.' },
