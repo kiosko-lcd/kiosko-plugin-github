@@ -64,7 +64,7 @@ export const activity = defineSource({
   minIntervalMs: 60_000,
   timeoutMs: 30_000,
   read: ({ options, signal }) => readGitHub(options, signal),
-  demo: ({ now }) => demoGitHub(now),
+  demo: ({ now, locale }) => demoGitHub(now, locale),
   // Every repo it has seen (runs and pull requests), for the widgets' filter.
   choices: {
     repos: (d) => {
@@ -88,7 +88,7 @@ const aliasesField = () =>
 const reposField = () => t.filter({ label: { en: 'Repositories', es: 'Repositorios', de: 'Repositorys', 'zh-Hant': '儲存庫', 'zh-Hans': '仓库' }, choices: { source: 'github/activity', list: 'repos' } });
 
 const dataOf = (sources: Record<string, unknown>) => sources[SOURCE] as GitHubData | undefined;
-const demo = ({ now }: { now: number }) => ({ sources: { [SOURCE]: demoGitHub(now) } });
+const demo = ({ now, locale }: { now: number; locale: string }) => ({ sources: { [SOURCE]: demoGitHub(now, locale) } });
 
 type Ctx = Pick<RenderContext<unknown, unknown>, 'theme' | 'kit' | 't' | 'fmt'>;
 
