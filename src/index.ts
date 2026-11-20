@@ -20,7 +20,7 @@ export const activity = defineSource({
     en: 'Actions runs of your repos, your open pull requests and the ones you are asked to review, through a token or the gh CLI.',
     es: 'Las ejecuciones de Actions de tus repos, tus pull requests abiertas y las que te piden revisar, con un token o con el CLI gh.',
     'zh-Hant': '透過權杖或 gh CLI 取得：你的儲存庫的 Actions 執行、你開啟中的 PR，以及請你審查的 PR。',
-    'zh-Hans': '通过令牌或 gh CLI 获取：你的仓库的 Actions 运行、你打开的 PR，以及请你审查的 PR。',
+    'zh-Hans': '通过令牌或 gh CLI 获取：你的仓库的 Actions 运行、你开放中的 PR，以及请你审查的 PR。',
   },
   options: t.object({
     host: t.string({ placeholder: 'github.com', risk: 'network', label: { en: 'GitHub host', es: 'Servidor de GitHub', 'zh-Hant': 'GitHub 主機', 'zh-Hans': 'GitHub 主机' }, help: { en: 'Empty = github.com. A GitHub Enterprise Server host uses its /api/v3.', es: 'Vacío = github.com. Un servidor GitHub Enterprise usa su /api/v3.', 'zh-Hant': '留空 = github.com。GitHub Enterprise Server 主機會使用它的 /api/v3。', 'zh-Hans': '留空 = github.com。GitHub Enterprise Server 主机会使用它的 /api/v3。' } }),
@@ -53,7 +53,7 @@ export const activity = defineSource({
     maxMentions: t.integer({
       default: 10, min: 0, max: 50, advanced: true,
       label: { en: 'Mentions read', es: 'Menciones leídas', 'zh-Hant': '讀取的提及數', 'zh-Hans': '读取的提及数' },
-      help: { en: 'Open issues and pull requests that mention you, at most. 0 = don\'t look for mentions.', es: 'Issues y pull requests abiertas que te mencionan, como mucho. 0 = no buscar menciones.', 'zh-Hant': '提及你的開啟中問題與 PR 的上限。0 = 不查詢提及。', 'zh-Hans': '提及你的打开中议题和 PR 的上限。0 = 不查询提及。' },
+      help: { en: 'Open issues and pull requests that mention you, at most. 0 = don\'t look for mentions.', es: 'Issues y pull requests abiertas que te mencionan, como mucho. 0 = no buscar menciones.', 'zh-Hant': '提及你的開啟中問題與 PR 的上限。0 = 不查詢提及。', 'zh-Hans': '提及你的开放中议题和 PR 的上限。0 = 不查询提及。' },
     }),
     bin: t.string({ default: 'gh', format: 'path', risk: 'exec', advanced: true, label: { en: 'gh command', es: 'Comando gh', 'zh-Hant': 'gh 指令', 'zh-Hans': 'gh 命令' } }),
   }),

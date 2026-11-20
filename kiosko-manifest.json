@@ -616,7 +616,7 @@
         "en": "Actions runs of your repos, your open pull requests and the ones you are asked to review, through a token or the gh CLI.",
         "es": "Las ejecuciones de Actions de tus repos, tus pull requests abiertas y las que te piden revisar, con un token o con el CLI gh.",
         "zh-Hant": "透過權杖或 gh CLI 取得：你的儲存庫的 Actions 執行、你開啟中的 PR，以及請你審查的 PR。",
-        "zh-Hans": "通过令牌或 gh CLI 获取：你的仓库的 Actions 运行、你打开的 PR，以及请你审查的 PR。"
+        "zh-Hans": "通过令牌或 gh CLI 获取：你的仓库的 Actions 运行、你开放中的 PR，以及请你审查的 PR。"
       },
       "polled": true,
       "intervalMs": 120000,
@@ -780,7 +780,7 @@
                 "en": "Open issues and pull requests that mention you, at most. 0 = don't look for mentions.",
                 "es": "Issues y pull requests abiertas que te mencionan, como mucho. 0 = no buscar menciones.",
                 "zh-Hant": "提及你的開啟中問題與 PR 的上限。0 = 不查詢提及。",
-                "zh-Hans": "提及你的打开中议题和 PR 的上限。0 = 不查询提及。"
+                "zh-Hans": "提及你的开放中议题和 PR 的上限。0 = 不查询提及。"
               },
               "advanced": true
             },
