@@ -70,7 +70,7 @@ test('GraphQL viewer: review requested, mine with review and checks, mentions', 
   assert.equal(v.authored[1]!.checks, null);
   assert.equal(v.mentions[0]!.kind, 'issue');
   assert.equal(v.mentions[0]!.author, 'ghost');
-  assert.deepEqual(v.authored.map((p) => prLook(p, colors).label), [{ en: 'changes', es: 'cambios' }, { en: 'no CI', es: 'sin CI' }]);
+  assert.deepEqual(v.authored.map((p) => prLook(p, colors).label), [{ en: 'changes', es: 'cambios', 'zh-Hant': '需修改', 'zh-Hans': '需修改' }, { en: 'no CI', es: 'sin CI', 'zh-Hant': '無 CI', 'zh-Hans': '无 CI' }]);
   assert.throws(() => parseViewer('{"data":null,"errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded"}]}'), /rate limit/);
   assert.throws(() => parseViewer('{"errors":[{"message":"Bad credentials"}]}'), /Bad credentials/);
 });
