@@ -14,7 +14,7 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { matchFilter, PluginError, type Filter, type Localized } from '@kiosko/sdk';
+import { localize, matchFilter, PluginError, type Filter, type Localized } from '@kiosko/sdk';
 
 const execFileAsync = promisify(execFile);
 
@@ -540,7 +540,23 @@ export function pullItems(data: Pick<GitHubData, 'me' | 'toReview' | 'authored' 
 }
 
 /** Sample data for the gallery: made-up repos and people. */
-export function demoGitHub(now: number): GitHubData {
+export function demoGitHub(now: number, locale = 'en'): GitHubData {
+  // Titles a team writes in its own language: localized like any other text (scripts/i18n-gaps.ts).
+  const T = {
+    router: { en: 'Bump the router to v7', es: 'Subir el router a v7', de: 'Router auf v7 anheben', 'zh-Hant': '路由升級到 v7', 'zh-Hans': '路由升级到 v7' },
+    flaky: { en: 'Fix the flaky login test', es: 'Arreglar el test de login inestable', de: 'Wackeligen Login-Test reparieren', 'zh-Hant': '修正不穩定的登入測試', 'zh-Hans': '修复不稳定的登录测试' },
+    rateLimit: { en: 'Rate-limit the public endpoints', es: 'Limitar peticiones a endpoints públicos', de: 'Öffentliche Endpunkte drosseln', 'zh-Hant': '公開端點加上速率限制', 'zh-Hans': '公开接口加上限流' },
+    aliases: { en: 'Tidy the shell aliases', es: 'Ordenar los alias de la shell', de: 'Shell-Aliase aufräumen', 'zh-Hant': '整理 shell 別名', 'zh-Hans': '整理 shell 别名' },
+    onboarding: { en: 'Update the onboarding guide', es: 'Actualizar la guía de bienvenida', de: 'Onboarding-Leitfaden aktualisieren', 'zh-Hant': '更新新人入門指南', 'zh-Hans': '更新新人入职指南' },
+    darkMode: { en: 'Dark mode toggle in settings', es: 'Interruptor de modo oscuro en ajustes', de: 'Dunkelmodus-Schalter in den Einstellungen', 'zh-Hant': '設定加入深色模式開關', 'zh-Hans': '设置中加入深色模式开关' },
+    offline: { en: 'Offline sync for drafts', es: 'Sincronizar borradores sin conexión', de: 'Offline-Sync für Entwürfe', 'zh-Hant': '草稿離線同步', 'zh-Hans': '草稿离线同步' },
+    certs: { en: 'Rotate the staging certificates', es: 'Rotar los certificados de staging', de: 'Staging-Zertifikate rotieren', 'zh-Hant': '更換測試環境憑證', 'zh-Hans': '轮换预发环境证书' },
+    perms: { en: 'Cache user permissions per request', es: 'Cachear permisos de usuario por petición', de: 'Benutzerrechte pro Anfrage cachen', 'zh-Hant': '每個請求快取使用者權限', 'zh-Hans': '按请求缓存用户权限' },
+    charts: { en: 'Move the charts to the new library', es: 'Pasar las gráficas a la nueva librería', de: 'Diagramme auf neue Bibliothek umstellen', 'zh-Hant': '圖表改用新的函式庫', 'zh-Hans': '图表迁移到新库' },
+    blank: { en: 'Login page is blank on Safari 17', es: 'Login en blanco en Safari 17', de: 'Login-Seite leer in Safari 17', 'zh-Hant': 'Safari 17 登入頁一片空白', 'zh-Hans': 'Safari 17 登录页一片空白' },
+  } satisfies Record<string, Localized>;
+  const n = (key: keyof typeof T) => localize(T[key], locale);
+
   const ago = (min: number) => new Date(now - min * 60_000).toISOString();
   const run = (repo: string, id: number, workflow: string, branch: string, actor: string, status: RunStatus, startMin: number, lenMin: number, title = ''): Run => ({
     repo, id, workflow, title, branch, actor, event: 'push', status, startedAt: ago(startMin), updatedAt: ago(Math.max(0, startMin - lenMin)),
@@ -552,26 +568,26 @@ export function demoGitHub(now: number): GitHubData {
     state: 'ok',
     me: 'you',
     runs: [
-      run('octo-org/web-app', 9001, 'CI', 'main', 'sam', 'failure', 25, 6, 'Bump the router to v7'),
-      run('octo-org/web-app', 9002, 'CI', 'fix/login-flake', 'you', 'in_progress', 3, 0, 'Fix the flaky login test'),
-      run('octo-org/api', 9003, 'Deploy', 'main', 'jordan', 'queued', 1, 0, 'Rate-limit the public endpoints'),
-      run('octo-org/api', 9004, 'Tests', 'main', 'jordan', 'success', 40, 4, 'Rate-limit the public endpoints'),
-      run('you/dotfiles', 9005, 'Lint', 'main', 'you', 'success', 300, 1, 'Tidy the shell aliases'),
-      run('octo-org/docs', 9006, 'Pages', 'main', 'alex', 'cancelled', 600, 2, 'Update the onboarding guide'),
+      run('octo-org/web-app', 9001, 'CI', 'main', 'sam', 'failure', 25, 6, n('router')),
+      run('octo-org/web-app', 9002, 'CI', 'fix/login-flake', 'you', 'in_progress', 3, 0, n('flaky')),
+      run('octo-org/api', 9003, 'Deploy', 'main', 'jordan', 'queued', 1, 0, n('rateLimit')),
+      run('octo-org/api', 9004, 'Tests', 'main', 'jordan', 'success', 40, 4, n('rateLimit')),
+      run('you/dotfiles', 9005, 'Lint', 'main', 'you', 'success', 300, 1, n('aliases')),
+      run('octo-org/docs', 9006, 'Pages', 'main', 'alex', 'cancelled', 600, 2, n('onboarding')),
     ],
     authored: [
-      pr('octo-org/web-app', 412, 'Fix the flaky login test', 'you', 30 * 60, 'review_required', 'failure'),
-      pr('octo-org/api', 88, 'Rate-limit the public endpoints', 'you', 6 * 60, 'changes_requested', 'success'),
-      pr('octo-org/web-app', 405, 'Dark mode toggle in settings', 'you', 120 * 60, 'approved', 'success'),
-      pr('octo-org/mobile', 17, 'Offline sync for drafts', 'you', 200 * 60, null, 'pending', { draft: true }),
+      pr('octo-org/web-app', 412, n('flaky'), 'you', 30 * 60, 'review_required', 'failure'),
+      pr('octo-org/api', 88, n('rateLimit'), 'you', 6 * 60, 'changes_requested', 'success'),
+      pr('octo-org/web-app', 405, n('darkMode'), 'you', 120 * 60, 'approved', 'success'),
+      pr('octo-org/mobile', 17, n('offline'), 'you', 200 * 60, null, 'pending', { draft: true }),
     ],
     toReview: [
-      pr('octo-org/infra', 12, 'Rotate the staging certificates', 'jordan', 50 * 60, 'review_required', 'failure'),
-      pr('octo-org/api', 91, 'Cache user permissions per request', 'sam', 26 * 60, 'review_required', 'pending'),
-      pr('octo-org/web-app', 398, 'Move the charts to the new library', 'alex', 3 * 60, 'review_required', 'success'),
+      pr('octo-org/infra', 12, n('certs'), 'jordan', 50 * 60, 'review_required', 'failure'),
+      pr('octo-org/api', 91, n('perms'), 'sam', 26 * 60, 'review_required', 'pending'),
+      pr('octo-org/web-app', 398, n('charts'), 'alex', 3 * 60, 'review_required', 'success'),
     ],
     mentions: [
-      pr('octo-org/web-app', 377, 'Login page is blank on Safari 17', 'riley', 48 * 60, null, null, { kind: 'issue' }),
+      pr('octo-org/web-app', 377, n('blank'), 'riley', 48 * 60, null, null, { kind: 'issue' }),
     ],
     notifications: 7,
   };
