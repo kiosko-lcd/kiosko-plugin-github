@@ -295,6 +295,7 @@ export default definePlugin({
   id: 'github',
   name: { en: 'GitHub', es: 'GitHub', 'zh-Hant': 'GitHub', 'zh-Hans': 'GitHub' },
   version: '0.2.1',
+  languages: ['en', 'es', 'zh-Hant', 'zh-Hans'],
   sdk: '^0.2.0',
   permissions: { network: ['api.github.com', 'user'], exec: ['gh'] },
   description: { en: 'Your Actions runs, the pull requests waiting for your review and your own.', es: 'Tus ejecuciones de Actions, las pull requests que te toca revisar y las tuyas.', 'zh-Hant': '你的 Actions 執行、等你審查的 PR，以及你自己的 PR。', 'zh-Hans': '你的 Actions 运行、等你审查的 PR，以及你自己的 PR。' },
