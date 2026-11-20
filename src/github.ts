@@ -14,7 +14,7 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { matchFilter, type Filter, type Localized } from '@kiosko/sdk';
+import { matchFilter, PluginError, type Filter, type Localized } from '@kiosko/sdk';
 
 const execFileAsync = promisify(execFile);
 
@@ -369,7 +369,14 @@ export async function readGitHub(c: Connection, signal: AbortSignal, deps: Deps 
     });
     const until = rateLimit(gq, now);
     if (until) throw new RateLimited(until);
-    if (gq.status === 401) throw new Error('GitHub: bad credentials (401)');
+    if (gq.status === 401) {
+      throw new PluginError({
+        en: 'GitHub: bad credentials (401): check the access token in this source, or run gh auth login',
+        es: 'GitHub: credenciales incorrectas (401): revisa el token de acceso de esta fuente o ejecuta gh auth login',
+        'zh-Hant': 'GitHub：憑證錯誤（401）：請檢查此資料來源的存取權杖，或執行 gh auth login',
+        'zh-Hans': 'GitHub：凭据错误（401）：请检查此数据源的访问令牌，或运行 gh auth login',
+      });
+    }
     if (!gq.ok) throw new Error(`GitHub GraphQL HTTP ${gq.status}`);
     const viewer = parseViewer(await gq.text(), now);
 
