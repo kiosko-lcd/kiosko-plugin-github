@@ -14,7 +14,7 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { matchFilter, type Filter, type Localized } from '@kiosko/sdk';
+import { matchFilter, PluginError, type Filter, type Localized } from '@kiosko/sdk';
 
 const execFileAsync = promisify(execFile);
 
@@ -369,7 +369,14 @@ export async function readGitHub(c: Connection, signal: AbortSignal, deps: Deps 
     });
     const until = rateLimit(gq, now);
     if (until) throw new RateLimited(until);
-    if (gq.status === 401) throw new Error('GitHub: bad credentials (401)');
+    if (gq.status === 401) {
+      throw new PluginError({
+        en: 'GitHub: bad credentials (401): check the access token in this source, or run gh auth login',
+        es: 'GitHub: credenciales incorrectas (401): revisa el token de acceso de esta fuente o ejecuta gh auth login',
+        'zh-Hant': 'GitHub：憑證錯誤（401）：請檢查此資料來源的存取權杖，或執行 gh auth login',
+        'zh-Hans': 'GitHub：凭据错误（401）：请检查此数据源的访问令牌，或运行 gh auth login',
+      });
+    }
     if (!gq.ok) throw new Error(`GitHub GraphQL HTTP ${gq.status}`);
     const viewer = parseViewer(await gq.text(), now);
 
@@ -450,25 +457,25 @@ const PLAIN: Colors = { alert: '', warn: '', info: '', ok: '', inkDim: '' };
 /** How each run status is called and coloured, as gitlab's pipelines. */
 export function runLook(status: RunStatus, colors: Colors): Look {
   switch (status) {
-    case 'failure': return { label: { en: 'failed', es: 'falla' }, color: colors.alert, rank: 0 };
-    case 'in_progress': return { label: { en: 'running', es: 'en curso' }, color: colors.info, rank: 1 };
-    case 'queued': return { label: { en: 'queued', es: 'en cola' }, color: colors.warn, rank: 2 };
-    case 'action_required': return { label: { en: 'waiting', es: 'espera' }, color: colors.warn, rank: 3 };
-    case 'success': return { label: { en: 'passed', es: 'ok' }, color: colors.ok, rank: 4 };
-    case 'cancelled': return { label: { en: 'canceled', es: 'cancelado' }, color: colors.inkDim, rank: 5 };
-    default: return { label: { en: 'skipped', es: 'saltado' }, color: colors.inkDim, rank: 5 };
+    case 'failure': return { label: { en: 'failed', es: 'falla', 'zh-Hant': '失敗', 'zh-Hans': '失败' }, color: colors.alert, rank: 0 };
+    case 'in_progress': return { label: { en: 'running', es: 'en curso', 'zh-Hant': '執行中', 'zh-Hans': '运行中' }, color: colors.info, rank: 1 };
+    case 'queued': return { label: { en: 'queued', es: 'en cola', 'zh-Hant': '排隊中', 'zh-Hans': '排队中' }, color: colors.warn, rank: 2 };
+    case 'action_required': return { label: { en: 'waiting', es: 'espera', 'zh-Hant': '等待中', 'zh-Hans': '等待中' }, color: colors.warn, rank: 3 };
+    case 'success': return { label: { en: 'passed', es: 'ok', 'zh-Hant': '通過', 'zh-Hans': '通过' }, color: colors.ok, rank: 4 };
+    case 'cancelled': return { label: { en: 'canceled', es: 'cancelado', 'zh-Hant': '已取消', 'zh-Hans': '已取消' }, color: colors.inkDim, rank: 5 };
+    default: return { label: { en: 'skipped', es: 'saltado', 'zh-Hant': '已略過', 'zh-Hans': '已跳过' }, color: colors.inkDim, rank: 5 };
   }
 }
 
 /** A pull request's state in one word: what blocks it first (failing checks, changes asked), else where it is. */
 export function prLook(pr: PullRequest, colors: Colors): Look {
-  if (pr.kind === 'issue') return { label: { en: 'issue', es: 'issue' }, color: colors.inkDim, rank: 5 };
-  if (pr.checks === 'failure') return { label: { en: 'checks fail', es: 'checks fallan' }, color: colors.alert, rank: 0 };
-  if (pr.review === 'changes_requested') return { label: { en: 'changes', es: 'cambios' }, color: colors.warn, rank: 1 };
-  if (pr.checks === 'pending') return { label: { en: 'running', es: 'en curso' }, color: colors.info, rank: 2 };
-  if (pr.review === 'approved') return { label: { en: 'approved', es: 'aprobada' }, color: colors.ok, rank: 4 };
-  if (pr.checks === 'success') return { label: { en: 'passed', es: 'ok' }, color: colors.ok, rank: 3 };
-  return { label: { en: 'no CI', es: 'sin CI' }, color: colors.inkDim, rank: 3 };
+  if (pr.kind === 'issue') return { label: { en: 'issue', es: 'issue', 'zh-Hant': '問題', 'zh-Hans': '议题' }, color: colors.inkDim, rank: 5 };
+  if (pr.checks === 'failure') return { label: { en: 'checks fail', es: 'checks fallan', 'zh-Hant': '檢查失敗', 'zh-Hans': '检查失败' }, color: colors.alert, rank: 0 };
+  if (pr.review === 'changes_requested') return { label: { en: 'changes', es: 'cambios', 'zh-Hant': '需修改', 'zh-Hans': '需修改' }, color: colors.warn, rank: 1 };
+  if (pr.checks === 'pending') return { label: { en: 'running', es: 'en curso', 'zh-Hant': '執行中', 'zh-Hans': '运行中' }, color: colors.info, rank: 2 };
+  if (pr.review === 'approved') return { label: { en: 'approved', es: 'aprobada', 'zh-Hant': '已核准', 'zh-Hans': '已批准' }, color: colors.ok, rank: 4 };
+  if (pr.checks === 'success') return { label: { en: 'passed', es: 'ok', 'zh-Hant': '通過', 'zh-Hans': '通过' }, color: colors.ok, rank: 3 };
+  return { label: { en: 'no CI', es: 'sin CI', 'zh-Hant': '無 CI', 'zh-Hans': '无 CI' }, color: colors.inkDim, rank: 3 };
 }
 
 /** Only the newest run of each repo + workflow + branch: what a person means by "how is CI". */

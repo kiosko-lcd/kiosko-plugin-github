@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createCanvas } from '@napi-rs/canvas';
 import * as kit from '@loksly/lcd-canvas-kit';
-import { createBaseContext, DEFAULT_THEME, validate, type WidgetDefinition } from '@kiosko/sdk';
+import { createBaseContext, DEFAULT_THEME, errorMessage, validate, type WidgetDefinition } from '@kiosko/sdk';
 import {
   demoGitHub, endpoints, hostName, inRepos, latestRuns, MAX_NOTIFICATIONS, nextLink, parseRuns, parseViewer, prLook, pullItems, queryVariables, readGitHub, resetState, runItems, runLook, runMs, runStatus, shortRef,
   type Connection, type Deps, type GitHubData,
@@ -70,7 +70,7 @@ test('GraphQL viewer: review requested, mine with review and checks, mentions', 
   assert.equal(v.authored[1]!.checks, null);
   assert.equal(v.mentions[0]!.kind, 'issue');
   assert.equal(v.mentions[0]!.author, 'ghost');
-  assert.deepEqual(v.authored.map((p) => prLook(p, colors).label), [{ en: 'changes', es: 'cambios' }, { en: 'no CI', es: 'sin CI' }]);
+  assert.deepEqual(v.authored.map((p) => prLook(p, colors).label), [{ en: 'changes', es: 'cambios', 'zh-Hant': '需修改', 'zh-Hans': '需修改' }, { en: 'no CI', es: 'sin CI', 'zh-Hant': '無 CI', 'zh-Hans': '无 CI' }]);
   assert.throws(() => parseViewer('{"data":null,"errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded"}]}'), /rate limit/);
   assert.throws(() => parseViewer('{"errors":[{"message":"Bad credentials"}]}'), /Bad credentials/);
 });
@@ -140,7 +140,12 @@ test('read: fine-grained tokens without notifications, a repo without access, ba
   assert.equal(d.notifications, null);
   assert.deepEqual(d.problems, ['octo-org/web-app: HTTP 404']);
   resetState();
-  await assert.rejects(readGitHub(conn(), signal, deps(fakeGitHub({ graphql: () => new Response('{"message":"Bad credentials"}', { status: 401 }) }).fetch)), /401/);
+  await assert.rejects(readGitHub(conn(), signal, deps(fakeGitHub({ graphql: () => new Response('{"message":"Bad credentials"}', { status: 401 }) }).fetch)), (err: unknown) => {
+    assert.match((err as Error).message, /401/);
+    assert.match(errorMessage(err, 'zh-TW'), /存取權杖/);
+    assert.match(errorMessage(err, 'zh-CN'), /访问令牌/);
+    return true;
+  });
 });
 
 test('short references, the repos filter and looks', () => {
