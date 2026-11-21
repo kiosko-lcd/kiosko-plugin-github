@@ -4,7 +4,7 @@
   "description": "GitHub cards: your Actions workflow runs, the pull requests waiting for your review and your own.",
   "type": "module",
   "license": "MIT",
-  "author": "Loksly",
+  "author": "Loksly <info@kioskolcd.dev> (https://kioskolcd.dev)",
   "keywords": [
     "kiosko",
     "kiosko-plugin",
