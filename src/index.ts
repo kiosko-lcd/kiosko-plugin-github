@@ -299,7 +299,7 @@ export const inbox = defineWidget({
 export default definePlugin({
   id: 'github',
   name: { en: 'GitHub', es: 'GitHub', de: 'GitHub', 'zh-Hant': 'GitHub', 'zh-Hans': 'GitHub' },
-  version: '0.2.1',
+  version: '0.2.2',
   languages: ['en', 'es', 'de', 'zh-Hant', 'zh-Hans'],
   sdk: '^0.2.0',
   permissions: { network: ['api.github.com', 'user'], exec: ['gh'] },
