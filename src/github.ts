@@ -548,7 +548,7 @@ export function demoGitHub(now: number, locale = 'en'): GitHubData {
     rateLimit: { en: 'Rate-limit the public endpoints', es: 'Limitar peticiones a endpoints públicos', de: 'Öffentliche Endpunkte drosseln', 'zh-Hant': '公開端點加上速率限制', 'zh-Hans': '公开接口加上限流' },
     aliases: { en: 'Tidy the shell aliases', es: 'Ordenar los alias de la shell', de: 'Shell-Aliase aufräumen', 'zh-Hant': '整理 shell 別名', 'zh-Hans': '整理 shell 别名' },
     onboarding: { en: 'Update the onboarding guide', es: 'Actualizar la guía de bienvenida', de: 'Onboarding-Leitfaden aktualisieren', 'zh-Hant': '更新新人入門指南', 'zh-Hans': '更新新人入职指南' },
-    darkMode: { en: 'Dark mode toggle in settings', es: 'Interruptor de modo oscuro en ajustes', de: 'Dunkelmodus-Schalter in den Einstellungen', 'zh-Hant': '設定加入深色模式開關', 'zh-Hans': '设置中加入深色模式开关' },
+    darkMode: { en: 'Dark mode toggle in settings', es: 'Interruptor de modo oscuro en ajustes', de: 'Dunkelmodus-Schalter in den Einstellungen', 'zh-Hant': '在設定中加入深色模式開關', 'zh-Hans': '设置中加入深色模式开关' },
     offline: { en: 'Offline sync for drafts', es: 'Sincronizar borradores sin conexión', de: 'Offline-Sync für Entwürfe', 'zh-Hant': '草稿離線同步', 'zh-Hans': '草稿离线同步' },
     certs: { en: 'Rotate the staging certificates', es: 'Rotar los certificados de staging', de: 'Staging-Zertifikate rotieren', 'zh-Hant': '更換測試環境憑證', 'zh-Hans': '轮换预发环境证书' },
     perms: { en: 'Cache user permissions per request', es: 'Cachear permisos de usuario por petición', de: 'Benutzerrechte pro Anfrage cachen', 'zh-Hant': '每個請求快取使用者權限', 'zh-Hans': '按请求缓存用户权限' },
