@@ -291,6 +291,12 @@ test('empty lists and states: message, hidden when asked, rate-limit hint in the
   assert.equal(reviews.empty!(state(reviews, none)), true);
   assert.equal(reviews.empty!(state(reviews, { ...none, state: 'unconfigured' })), false, 'not configured: says so');
   assert.equal(actions.empty!(state(actions, undefined)), false);
+  assert.equal(actions.empty!(state(actions, { ...none, state: 'unconfigured' })), true, 'actions: not configured, passes its turn');
+  assert.equal(actions.empty!(state(actions, data)), false);
+  assert.equal(inbox.empty!(state(inbox, { ...data, state: 'unconfigured' })), true, 'inbox: not configured');
+  assert.equal(inbox.empty!(state(inbox, none)), false, 'inbox: zeros are worth seeing');
+  assert.equal(inbox.empty!(state(inbox, data)), false);
+  assert.equal(inbox.empty!(state(inbox, undefined)), false, 'inbox: loading');
   assert.equal(reviews.hideWhenEmpty, true);
   assert.ok(!actions.hideWhenEmpty);
   const until = new Date(NOW + 600_000);

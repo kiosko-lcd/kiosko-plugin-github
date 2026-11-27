@@ -158,7 +158,8 @@ export const actions = defineWidget({
   redraw: ({ sources, now }) => (dataOf(sources)?.runs.some((r) => r.status === 'in_progress' && now - Date.parse(r.startedAt) < 60_000) ? 'second' : 'minute'),
   empty: ({ options, sources }) => {
     const data = dataOf(sources);
-    return listed(data) && !runItems(data.runs, options).length;
+    // Not configured: nothing to list (it says so when alone).
+    return data?.state === 'unconfigured' || (listed(data) && !runItems(data.runs, options).length);
   },
   render(g, ctx) {
     const { options, sources, now, theme, fmt, t: tr } = ctx;
@@ -271,6 +272,8 @@ export const inbox = defineWidget({
   size: { min: { w: 160, h: 70 }, preferred: { w: 300, h: 110 } },
   sources: [SOURCE],
   options: t.object({}),
+  // Not configured: no numbers to show. Zeros are worth seeing, so they are not empty.
+  empty: ({ sources }) => dataOf(sources)?.state === 'unconfigured',
   idle: ({ sources }) => {
     const d = dataOf(sources);
     return !d || (d.state === 'ok' && !d.toReview.length && !latestRuns(d.runs).some((r) => r.status === 'failure') && !d.notifications);
@@ -304,7 +307,7 @@ export const inbox = defineWidget({
 export default definePlugin({
   id: 'github',
   name: { en: 'GitHub', es: 'GitHub', de: 'GitHub', 'zh-Hant': 'GitHub', 'zh-Hans': 'GitHub' },
-  version: '0.3.0',
+  version: '0.3.1',
   languages: ['en', 'es', 'de', 'zh-Hant', 'zh-Hans'],
   sdk: '^0.2.0',
   permissions: { network: ['api.github.com', 'user'], exec: ['gh'] },

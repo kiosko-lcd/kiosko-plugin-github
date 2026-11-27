@@ -1,6 +1,6 @@
 {
   "name": "kiosko-plugin-github",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "GitHub cards: your Actions workflow runs, the pull requests waiting for your review and your own.",
   "type": "module",
   "license": "MIT",
