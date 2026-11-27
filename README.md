@@ -78,7 +78,7 @@ Uses: `github/activity`.
 
 ### GitHub activity — `github/activity`
 
-Actions runs of your repos, your open pull requests and the ones you are asked to review, through a token or the gh CLI. Read every 2 min while a widget uses it. Options are set once in Kiosko → Settings → Data sources.
+Actions runs of your repos, your open pull requests and the ones you are asked to review, through a token or the gh CLI. Read every 2 min while a widget uses it. Options are set in Kiosko → Settings → Data sources.
 
 | Option | Type | Default | |
 |---|---|---|---|
@@ -90,6 +90,12 @@ Actions runs of your repos, your open pull requests and the ones you are asked t
 | `runsPerRepo` | number | `10` | Runs read per repo |
 | `maxMentions` | number | `10` | Mentions read. Open issues and pull requests that mention you, at most. 0 = don't look for mentions. |
 | `bin` | string | `"gh"` | gh command |
+
+### Several accounts
+
+With Kiosko 0.2.12 and later the source can have **profiles**: named configurations, each with its own options, say «Personal» with your own token, «Work» with the company's token and `query` set to `org:acme`, and «Enterprise» with a GitHub Enterprise Server host. A profile without a token asks gh for its host's login (`gh auth login --hostname github.example.com`); two accounts on the same host need a token each, since `gh auth token` gives the active one only.
+
+Each profile is read on its own and keeps its own ETags, notifications count, last data and rate limit: one account being rate-limited doesn't stop the others. Each tile picks its profile in the inspector (**Source profile**; **New profile…** makes one from the tile), and the **Repositories** filter lists the repos of that profile. Settings → Data sources shows the profiles as tabs. A tile with no profile reads the source's own options, as before; with older Kiosko versions there is one account.
 
 ## Development
 

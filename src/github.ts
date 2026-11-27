@@ -7,7 +7,8 @@
  * REST calls carry `If-None-Match`: a 304 doesn't count against the rate
  * limit, so polling every couple of minutes is nearly free. When GitHub
  * says we're rate-limited, nothing is called until the reset and the last
- * good data is kept, flagged so the cards can show a hint.
+ * good data is kept, flagged so the cards can show a hint. All of that is
+ * kept for each source profile apart (two accounts, an Enterprise host).
  *
  * Credentials: the `token` option, or else `gh auth token` (the gh CLI's
  * login). Neither: a `not configured` state the cards explain, never a crash.
@@ -257,21 +258,39 @@ export function parseRuns(json: string, repo: string): Run[] {
 /* ---------- HTTP with ETags and rate limits ---------- */
 
 interface Cached { etag: string; body: string; link: string | null }
-/** ETag cache: `credential tail + url` → last 200 body (and its Link header). Module-wide, it lives as long as the plugin. */
-const etags = new Map<string, Cached>();
-/** Earliest time the notifications endpoint may be polled again (X-Poll-Interval). */
-let notificationsNotBefore = 0;
-let lastNotifications: number | null = null;
-let rateLimitedUntil = 0;
-let lastGood: GitHubData | undefined;
 
-/** Forgets every cache (tests). */
+/**
+ * What a read remembers between reads, kept apart for each source profile
+ * (Kiosko 0.2.12 on: two accounts, an Enterprise host): one account's rate
+ * limit, notifications poll interval or last good data never leak into
+ * another's. The default profile is `''`.
+ */
+interface ReadState {
+  /** ETag cache: `credential tail + url` → last 200 body (and its Link header). */
+  etags: Map<string, Cached>;
+  /** Earliest time the notifications endpoint may be polled again (X-Poll-Interval). */
+  notificationsNotBefore: number;
+  lastNotifications: number | null;
+  rateLimitedUntil: number;
+  lastGood: GitHubData | undefined;
+}
+
+/** Module-wide, it lives as long as the plugin: one state per profile. */
+const states = new Map<string, ReadState>();
+
+/** The state of a profile (undefined or '' for the default one), made on first use. */
+function stateOf(profile = ''): ReadState {
+  let st = states.get(profile);
+  if (!st) {
+    st = { etags: new Map(), notificationsNotBefore: 0, lastNotifications: null, rateLimitedUntil: 0, lastGood: undefined };
+    states.set(profile, st);
+  }
+  return st;
+}
+
+/** Forgets every cache, of every profile (tests). */
 export function resetState(): void {
-  etags.clear();
-  notificationsNotBefore = 0;
-  lastNotifications = null;
-  rateLimitedUntil = 0;
-  lastGood = undefined;
+  states.clear();
 }
 
 function rateLimit(res: Response, now: number): number | null {
@@ -285,9 +304,9 @@ function rateLimit(res: Response, now: number): number | null {
   return null;
 }
 
-async function getJson(deps: Deps, token: string, url: string, signal: AbortSignal): Promise<{ status: number; body: string; headers: Headers; link: string | null }> {
+async function getJson(deps: Deps, st: ReadState, token: string, url: string, signal: AbortSignal): Promise<{ status: number; body: string; headers: Headers; link: string | null }> {
   const key = `${token.slice(-8)} ${url}`;
-  const cached = etags.get(key);
+  const cached = st.etags.get(key);
   const res = await deps.fetch(url, {
     headers: {
       Accept: 'application/vnd.github+json',
@@ -305,7 +324,7 @@ async function getJson(deps: Deps, token: string, url: string, signal: AbortSign
   const link = res.headers.get('link');
   if (res.ok) {
     const etag = res.headers.get('etag');
-    if (etag) etags.set(key, { etag, body, link });
+    if (etag) st.etags.set(key, { etag, body, link });
   }
   return { status: res.status, body, headers: res.headers, link };
 }
@@ -326,12 +345,12 @@ export const MAX_NOTIFICATIONS = 100;
  * Unread notifications, counted over up to two pages (`MAX_NOTIFICATIONS`):
  * enough for the inbox's "99+". Null when the token can't read them.
  */
-async function countNotifications(deps: Deps, token: string, rest: string, signal: AbortSignal): Promise<{ count: number | null; poll: number }> {
+async function countNotifications(deps: Deps, st: ReadState, token: string, rest: string, signal: AbortSignal): Promise<{ count: number | null; poll: number }> {
   let url: string | null = `${rest}/notifications?per_page=50`;
   let count = 0;
   let poll = 0;
   for (let page = 0; url && page * 50 < MAX_NOTIFICATIONS; page++) {
-    const r = await getJson(deps, token, url, signal);
+    const r = await getJson(deps, st, token, url, signal);
     if (page === 0) poll = Number(r.headers.get('x-poll-interval'));
     if (r.status !== 200) return { count: page === 0 ? null : count, poll };
     count += (JSON.parse(r.body) as unknown[]).length;
@@ -352,10 +371,15 @@ export async function resolveToken(c: Connection, deps: Deps, signal: AbortSigna
 
 const empty = (state: GitHubData['state']): GitHubData => ({ state, me: '', runs: [], authored: [], toReview: [], mentions: [], notifications: null });
 
-/** One read of everything the cards show. `signal` aborts it (Kiosko aborts it after the source's `timeoutMs`). */
-export async function readGitHub(c: Connection, signal: AbortSignal, deps: Deps = defaultDeps): Promise<GitHubData> {
+/**
+ * One read of everything the cards show. `signal` aborts it (Kiosko aborts
+ * it after the source's `timeoutMs`). `profile`: the source profile being
+ * read (`ctx.profile`), whose caches and rate limit it uses.
+ */
+export async function readGitHub(c: Connection, signal: AbortSignal, deps: Deps = defaultDeps, profile?: string): Promise<GitHubData> {
+  const st = stateOf(profile);
   const now = deps.now();
-  if (now < rateLimitedUntil) return { ...(lastGood ?? empty('ok')), rateLimitedUntil };
+  if (now < st.rateLimitedUntil) return { ...(st.lastGood ?? empty('ok')), rateLimitedUntil: st.rateLimitedUntil };
   const token = await resolveToken(c, deps, signal);
   if (!token) return empty('unconfigured');
   const api = endpoints(c.host);
@@ -384,7 +408,7 @@ export async function readGitHub(c: Connection, signal: AbortSignal, deps: Deps 
     const problems: string[] = [];
     const perPage = Math.max(1, Math.min(30, Math.round(c.runsPerRepo) || 10));
     const runLists = await Promise.all((repos.length ? repos : viewer.recentRepos).map(async (repo) => {
-      const r = await getJson(deps, token, `${api.rest}/repos/${repo}/actions/runs?per_page=${perPage}&exclude_pull_requests=true`, signal);
+      const r = await getJson(deps, st, token, `${api.rest}/repos/${repo}/actions/runs?per_page=${perPage}&exclude_pull_requests=true`, signal);
       if (r.status !== 200) {
         problems.push(`${repo}: HTTP ${r.status}`);
         return [];
@@ -392,27 +416,27 @@ export async function readGitHub(c: Connection, signal: AbortSignal, deps: Deps 
       return parseRuns(r.body, repo);
     }));
 
-    if (now >= notificationsNotBefore) {
-      const { count, poll } = await countNotifications(deps, token, api.rest, signal);
-      notificationsNotBefore = now + (poll > 0 ? poll * 1000 : 60_000);
-      lastNotifications = count;
+    if (now >= st.notificationsNotBefore) {
+      const { count, poll } = await countNotifications(deps, st, token, api.rest, signal);
+      st.notificationsNotBefore = now + (poll > 0 ? poll * 1000 : 60_000);
+      st.lastNotifications = count;
     }
 
-    lastGood = {
+    st.lastGood = {
       state: 'ok',
       me: viewer.me,
       runs: runLists.flat(),
       authored: viewer.authored,
       toReview: viewer.toReview,
       mentions: viewer.mentions,
-      notifications: lastNotifications,
+      notifications: st.lastNotifications,
       ...(problems.length ? { problems } : {}),
     };
-    return lastGood;
+    return st.lastGood;
   } catch (e) {
     if (e instanceof RateLimited) {
-      rateLimitedUntil = e.until;
-      return { ...(lastGood ?? empty('ok')), rateLimitedUntil };
+      st.rateLimitedUntil = e.until;
+      return { ...(st.lastGood ?? empty('ok')), rateLimitedUntil: st.rateLimitedUntil };
     }
     throw e;
   }

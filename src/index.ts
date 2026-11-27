@@ -2,7 +2,9 @@
  * GitHub at a glance, the sibling of kiosko-plugin-gitlab: your Actions runs
  * (broken first, in red, running ones with a timer), the pull requests
  * waiting for your review next to your own, and a small inbox tile. All read
- * one shared source, configured once in Settings → Sources.
+ * one shared source, configured in Settings → Sources. It has profiles
+ * (Kiosko 0.2.12 on): several accounts or organisations, each with its
+ * token and its own rate limit, and each tile picks one.
  */
 import { defineSource, definePlugin, defineWidget, drawEmpty, listLayout, listOptions, t, type Box, type Graphics, type RenderContext } from '@kiosko/sdk';
 import { drawLines } from './draw.ts';
@@ -63,8 +65,11 @@ export const activity = defineSource({
   // One GraphQL query and a REST call per repo each read: a floor that keeps far from the hourly API limit.
   minIntervalMs: 60_000,
   timeoutMs: 30_000,
-  read: ({ options, signal }) => readGitHub(options, signal),
+  // Each profile's rate limit, ETags and last data apart: `ctx.profile` (Kiosko 0.2.12 on; undefined before).
+  read: (ctx) => readGitHub(ctx.options, ctx.signal, undefined, (ctx as { profile?: string }).profile),
   demo: ({ now, locale }) => demoGitHub(now, locale),
+  // Several accounts (personal, work, an Enterprise host), each with its token: Kiosko 0.2.12 and later; older ones ignore it.
+  ...({ profiles: true } as {}),
   // Every repo it has seen (runs and pull requests), for the widgets' filter.
   choices: {
     repos: (d) => {
@@ -299,7 +304,7 @@ export const inbox = defineWidget({
 export default definePlugin({
   id: 'github',
   name: { en: 'GitHub', es: 'GitHub', de: 'GitHub', 'zh-Hant': 'GitHub', 'zh-Hans': 'GitHub' },
-  version: '0.2.2',
+  version: '0.3.0',
   languages: ['en', 'es', 'de', 'zh-Hant', 'zh-Hans'],
   sdk: '^0.2.0',
   permissions: { network: ['api.github.com', 'user'], exec: ['gh'] },
